@@ -484,6 +484,33 @@ body{font-family:'Outfit',sans-serif;background:var(--off);color:var(--gray-800)
 }
 .btn-del:hover { background:rgba(220,38,38,.08); }
 
+/* ── PESTAÑAS DEL PANEL ── */
+.admin-tabs{display:flex;gap:0;margin-bottom:22px;border-bottom:2px solid var(--gray-100)}
+.atab{padding:10px 22px;border:none;background:none;font-family:'Outfit',sans-serif;
+  font-size:.83rem;font-weight:600;color:var(--gray-400);cursor:pointer;
+  border-bottom:2px solid transparent;margin-bottom:-2px;transition:var(--t)}
+.atab:hover{color:var(--blue-deep)}
+.atab.atab-active{color:var(--blue);border-bottom-color:var(--blue)}
+
+/* ── GESTIÓN DE USUARIOS ── */
+.usr-hint{font-size:.78rem;color:var(--gray-400);line-height:1.6;padding:12px 22px 0}
+.usr-tbl{width:100%;border-collapse:collapse;margin-top:8px}
+.usr-tbl th{text-align:left;padding:10px 22px;font-size:.62rem;font-weight:700;letter-spacing:.7px;
+  text-transform:uppercase;color:var(--gray-400);background:var(--off);border-bottom:1px solid var(--gray-100)}
+.usr-tbl td{padding:11px 22px;font-size:.82rem;color:var(--gray-600);border-bottom:1px solid var(--gray-100)}
+.usr-tbl tr:last-child td{border-bottom:none}
+.usr-name{font-weight:600;color:var(--blue-deep)}
+.usr-you{font-weight:400;color:var(--gray-400);font-size:.76rem}
+.usr-mail{color:var(--gray-400);font-size:.78rem}
+.usr-msg{text-align:center;padding:26px;color:var(--gray-400)}
+.usr-select{padding:7px 10px;border:1px solid var(--gray-200);border-radius:8px;
+  font-family:'Outfit',sans-serif;font-size:.8rem;cursor:pointer;background:#fff;min-width:150px}
+.usr-select:disabled{opacity:.65;cursor:not-allowed}
+.usr-select.usr-admin{border-color:rgba(22,163,74,.45);color:#14532d;background:rgba(22,163,74,.06);font-weight:600}
+.usr-select.usr-viewer{border-color:rgba(18,85,163,.35);color:var(--blue-deep);background:rgba(18,85,163,.05)}
+.usr-select.usr-ninguno{color:var(--gray-400)}
+@media(max-width:640px){.usr-mail,.usr-tbl th:nth-child(2){display:none}}
+
 /* ── TIPO BADGE ── */
 .tipo-badge {
   display:inline-flex;align-items:center;gap:4px;padding:3px 9px;
@@ -730,6 +757,11 @@ body{font-family:'Outfit',sans-serif;background:var(--off);color:var(--gray-800)
     <div id="offline-banner" style="display:none;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);border-radius:var(--r);padding:12px 16px;margin-bottom:18px;color:#991b1b;font-size:.84rem;line-height:1.5;">
       ⚠️ <strong>Sin conexión con la base de datos.</strong> Está viendo una copia local que puede estar desactualizada. No haga cambios hasta que se restablezca la conexión.
     </div>
+    <div class="admin-tabs" id="admin-tabs" style="display:none">
+      <button class="atab atab-active" id="atab-reg" onclick="showAdminTab('reg')">📋 Registros</button>
+      <button class="atab" id="atab-usr" onclick="showAdminTab('usr')">👥 Usuarios</button>
+    </div>
+    <div id="tab-reg">
     <div class="stats-row" id="admin-stats"></div>
     <div class="table-card">
       <!-- Filters -->
@@ -800,6 +832,20 @@ body{font-family:'Outfit',sans-serif;background:var(--off);color:var(--gray-800)
         <div id="adm-empty" class="empty-st" style="display:none">
           <div class="ei">📋</div><p>No hay registros que coincidan con los filtros.</p>
         </div>
+      </div>
+    </div>
+    </div><!-- /tab-reg -->
+    <div id="tab-usr" style="display:none">
+      <div class="table-card">
+        <div class="tc-head">
+          <h3>Acceso a la Academia</h3>
+          <span id="usr-count" style="font-size:.78rem;color:var(--gray-400);"></span>
+        </div>
+        <p class="usr-hint">Son las mismas cuentas de firmas y gestión documental. Aquí solo decide quién entra a la Academia y con qué permisos — no cambia el acceso de nadie a los otros sistemas.</p>
+        <table class="usr-tbl">
+          <thead><tr><th>Usuario</th><th>Correo</th><th style="width:190px">Acceso</th></tr></thead>
+          <tbody id="usr-tbody"></tbody>
+        </table>
       </div>
     </div>
   </div>
@@ -1121,6 +1167,7 @@ async function doAdminLogout() {
     try { await sb.auth.signOut(); } catch(e) {}
   }
   adminLoggedIn=false; adminRole='';
+  showAdminTab('reg');
   showScreen('login');
 }
 
@@ -1192,7 +1239,7 @@ function showBlockedScreen(rec, name) {
       <div class="blocked-icon">🎓</div>
       <h2>¡Inducción ya realizada!</h2>
       <p>Usted ya realizó su proceso de inducción corporativa de <strong>DON ASEO LTDA.</strong></p>
-      <p style="margin-bottom:20px;">Fecha registrada: <strong>${rec?.fecha||'registrada en el sistema'}</strong></p>
+      <p style="margin-bottom:20px;">Fecha registrada: <strong>${escapeHtml(rec?.fecha||'registrada en el sistema')}</strong></p>
       <div class="blocked-badge">📋 ¿Desea realizar su proceso de reinducción?</div>
       <div style="margin-top:24px;padding:20px;background:var(--off);border-radius:var(--r);border:1px solid var(--gray-200);">
         <div style="font-size:28px;margin-bottom:10px;">🔒</div>
@@ -1890,7 +1937,105 @@ function renderAdminUI() {
   renderTable();
 }
 
+// ═══════════════════════════════════════
+// SEGURIDAD — escape de HTML
+// ═══════════════════════════════════════
+// Todo dato que venga de la base y se pinte con innerHTML debe pasar por aquí.
+// El formulario de inducción es público: sin esto, alguien podría registrarse
+// con un "nombre" que en realidad sea código y ejecutarlo en la sesión de RRHH.
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]
+  ));
+}
+
+// ═══════════════════════════════════════
+// PESTAÑAS DEL PANEL Y GESTIÓN DE USUARIOS
+// ═══════════════════════════════════════
+function showAdminTab(tab) {
+  const reg = document.getElementById('tab-reg');
+  const usr = document.getElementById('tab-usr');
+  if(!reg || !usr) return;
+  reg.style.display = tab === 'usr' ? 'none' : '';
+  usr.style.display = tab === 'usr' ? '' : 'none';
+  document.getElementById('atab-reg').classList.toggle('atab-active', tab !== 'usr');
+  document.getElementById('atab-usr').classList.toggle('atab-active', tab === 'usr');
+  if(tab === 'usr') renderUsuarios();
+}
+
+// Solo los administradores ven la pestaña de usuarios.
+function syncAdminTabs() {
+  const tabs = document.getElementById('admin-tabs');
+  if(tabs) tabs.style.display = adminRole === 'admin' ? '' : 'none';
+  if(adminRole !== 'admin') showAdminTab('reg');
+}
+
+const ETIQUETA_ROL = { ninguno: 'Sin acceso', viewer: 'Solo lectura', admin: 'Administrador' };
+
+async function renderUsuarios() {
+  const tb  = document.getElementById('usr-tbody');
+  const cnt = document.getElementById('usr-count');
+  tb.innerHTML = '<tr><td colspan="3" class="usr-msg">Cargando usuarios...</td></tr>';
+  cnt.textContent = '';
+
+  const { data, error } = await sb.rpc('ind_listar_usuarios');
+  if(error) {
+    tb.innerHTML = '<tr><td colspan="3" class="usr-msg">No se pudo cargar la lista de usuarios.</td></tr>';
+    return;
+  }
+
+  const usuarios = data || [];
+  cnt.textContent = usuarios.length + ' registrado(s)';
+  tb.innerHTML = usuarios.map(u => {
+    const rol = u.rol || 'ninguno';
+    const opciones = ['ninguno','viewer','admin']
+      .map(v => `<option value="${v}" ${v===rol?'selected':''}>${ETIQUETA_ROL[v]}</option>`).join('');
+    return `<tr>
+      <td class="usr-name">${escapeHtml(u.nombre)}${u.es_yo ? ' <span class="usr-you">(tú)</span>' : ''}</td>
+      <td class="usr-mail">${escapeHtml(u.email)}</td>
+      <td>
+        <select class="usr-select usr-${rol}" data-user="${escapeHtml(u.user_id)}" data-prev="${rol}"
+                ${u.es_yo ? 'disabled title="No puede cambiar su propio acceso"' : ''}
+                onchange="cambiarAcceso(this)">${opciones}</select>
+      </td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="3" class="usr-msg">No hay usuarios registrados.</td></tr>';
+}
+
+async function cambiarAcceso(sel) {
+  const userId = sel.dataset.user;
+  const nuevo  = sel.value;
+  const previo = sel.dataset.prev;
+  sel.disabled = true;
+
+  let res = null;
+  try {
+    const { data, error } = await sb.rpc('ind_asignar_rol', { p_user_id: userId, p_rol: nuevo });
+    res = error ? { ok: false } : data;
+  } catch(e) { res = { ok: false }; }
+
+  sel.disabled = false;
+
+  if(!res || !res.ok) {
+    sel.value = previo;
+    const motivos = {
+      no_autorizado:            'No tiene permisos para cambiar accesos',
+      no_puedes_quitarte_admin: 'No puede quitarse su propio rol de administrador',
+      ultimo_admin:             'Debe quedar al menos un administrador',
+      usuario_no_existe:        'Ese usuario ya no existe',
+      rol_invalido:             'Rol no válido'
+    };
+    showToast('⚠️ ' + (motivos[res?.error] || 'No se pudo cambiar el acceso'));
+    return;
+  }
+
+  sel.dataset.prev = nuevo;
+  sel.className = 'usr-select usr-' + nuevo;
+  showToast('✅ Acceso actualizado: ' + ETIQUETA_ROL[nuevo]);
+}
+
 async function renderAdmin() {
+  syncAdminTabs();
   document.getElementById('admin-stats').innerHTML=`
     <div class="stat-card" style="grid-column:1/-1;justify-content:center;padding:24px;">
       <div style="color:var(--gray-400);font-size:.88rem;display:flex;align-items:center;gap:10px;">
@@ -1945,11 +2090,11 @@ function renderTable() {
     const isChecked=selectedIds.has(String(r.id));
     return `<tr id="row-${r.id}">
       <td><input type="checkbox" class="row-check" value="${r.id}" ${isChecked?'checked':''} onchange="toggleRow('${r.id}',this.checked)"></td>
-      <td class="dn" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.name}">${r.name}</td>
-      <td>${r.cedula}</td>
-      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.cargo||''}">${r.cargo||'—'}</td>
-      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${r.edificio||r.dep||''}">${r.edificio||r.dep||'—'}</td>
-      <td>${r.fecha||'—'}</td>
+      <td class="dn" style="max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.name)}">${escapeHtml(r.name)}</td>
+      <td>${escapeHtml(r.cedula)}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.cargo||'')}">${escapeHtml(r.cargo||'—')}</td>
+      <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(r.edificio||r.dep||'')}">${escapeHtml(r.edificio||r.dep||'—')}</td>
+      <td>${escapeHtml(r.fecha||'—')}</td>
       <td><span class="tipo-badge ${tipoCls}">${tipoLabel}</span>${r.reinduccion_habilitada?'<span style="display:inline-block;margin-left:4px;background:rgba(200,169,42,.15);color:#92700c;font-size:.62rem;padding:1px 6px;border-radius:10px;font-weight:700;">🔄 Habilitada</span>':''}</td>
       <td><strong style="color:${r.passed?'#14532d':'#7f1d1d'}">${r.nota}%</strong></td>
       <td>${r.passed?`<span class="status-badge sb-ok">✅ Aprobado</span>`:`<span class="status-badge sb-fail">❌ Reprobado</span>`}</td>
