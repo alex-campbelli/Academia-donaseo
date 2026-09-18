@@ -919,7 +919,8 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 .rh-ced-body{padding:16px 20px 20px}
 .rh-ced-text{display:block;height:auto;min-height:150px;padding:12px 14px;resize:vertical;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.86rem;line-height:1.55}
 .rh-ced-acciones{display:flex;gap:10px;margin-top:12px}
-.rh-kpis.rh-ced-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}
+.rh-kpis.rh-ced-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
+.rh-ced-motivo{font-size:.74rem;color:var(--rh-muted);margin-top:4px;line-height:1.35}
 .rh-ced-nota{font-size:.8rem;color:var(--rh-text-2);margin:-6px 0 14px}
 .rh-ced-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:14px 18px;border-bottom:1px solid var(--rh-border)}
 .rh-ced-botones{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
@@ -1260,7 +1261,8 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
               <div class="rh-status-tabs" id="ced-tabs"></div>
               <div class="rh-ced-botones">
                 <button class="rh-btn" id="ced-copiar" onclick="copiarFaltantes()" title="Copia nombre, cédula y motivo de quienes no tienen certificado"><i data-icon="copy"></i>Copiar faltantes</button>
-                <button class="rh-btn" onclick="exportarCedulas()"><i data-icon="sheet"></i>Exportar Excel</button>
+                <button class="rh-btn" id="ced-faltantes" onclick="descargarFaltantes()" title="Descarga en Excel a quienes no tienen certificado"><i data-icon="sheet"></i>Descargar faltantes</button>
+                <button class="rh-btn" onclick="exportarCedulas()" title="Descarga en Excel toda la lista con su resultado"><i data-icon="sheet"></i>Exportar todo</button>
                 <button class="rh-btn rh-btn-primary" id="ced-descargar" onclick="descargarPorCedula()"><i data-icon="download"></i>Descargar certificados</button>
               </div>
             </div>
@@ -3655,11 +3657,18 @@ function showToast(msg) {
 // plataforma de RRHH) y se cruzan con los registros que ya tiene el panel.
 let _cedResultado = [], _cedFiltro = '', _cedAvisos = { invalidas: [], repetidas: 0, extras: 0 };
 const normCedula = t => String(t || '').replace(/\D/g, '').replace(/^0+/, '');
+// Dos grupos: con certificado (aprobó en algún intento, aunque haya reprobado
+// otros) y sin certificado (nunca aprobó: no la presentó o no aprobó ningún intento).
 const ESTADOS_CED = {
-  ok:      { etiqueta: 'Con certificado', pill: 'ok',   ico: 'check' },
-  reprobo: { etiqueta: 'No aprobó',       pill: 'bad',  ico: 'x' },
-  sin:     { etiqueta: 'Sin inducción',   pill: 'pend', ico: 'clock' }
+  ok:    { etiqueta: 'Con certificado', pill: 'ok',  ico: 'check' },
+  falta: { etiqueta: 'Sin certificado', pill: 'bad', ico: 'x' }
 };
+// Por qué no tiene certificado, en texto.
+function motivoCed(x) {
+  if(x.estado !== 'falta') return '';
+  if(!x.intentos) return 'No la ha presentado';
+  return `${x.intentos} intento${x.intentos === 1 ? '' : 's'} sin aprobar · mejor nota ${x.mejorNota}%`;
+}
 // Cada línea puede traer nombre y cédula (como sale de la plataforma de RRHH o
 // de Excel), solo la cédula, o varias cédulas separadas por comas.
 const TIPO_DOC = /^(c\.?c\.?|t\.?i\.?|c\.?e\.?|nit|no\.?|n[°º]\.?|c[eé]dula|documento|doc\.?)$/i;
@@ -3719,9 +3728,10 @@ function buscarCedulas(silencioso) {
   _cedResultado = personas.map(({ cedula: c, nombre }) => {
     const regs = (porCedula.get(c) || []).slice().sort(recientePrimero);
     const aprobado = regs.find(r => r.passed);
-    if(aprobado) return { cedula: c, nombre, estado: 'ok', rec: aprobado };
-    if(regs.length) return { cedula: c, nombre, estado: 'reprobo', rec: regs[0] };
-    return { cedula: c, nombre, estado: 'sin', rec: null };
+    // Si aprobó en cualquier intento tiene certificado, aunque haya reprobado otros.
+    if(aprobado) return { cedula: c, nombre, estado: 'ok', rec: aprobado, intentos: regs.length };
+    const mejorNota = regs.reduce((m, r) => Math.max(m, Math.round(Number(r.nota) || 0)), 0);
+    return { cedula: c, nombre, estado: 'falta', rec: regs[0] || null, intentos: regs.length, mejorNota };
   });
   _cedAvisos = { invalidas, repetidas, extras };
   if(!silencioso) _cedFiltro = '';
@@ -3730,15 +3740,16 @@ function buscarCedulas(silencioso) {
 function pintarCedulas() {
   document.getElementById('ced-resultado').hidden = false;
   const f = v => v.toLocaleString('es-CO');
-  const n = { '': _cedResultado.length, ok: 0, reprobo: 0, sin: 0 };
+  const n = { '': _cedResultado.length, ok: 0, falta: 0 };
   _cedResultado.forEach(x => n[x.estado]++);
+  const nunca = _cedResultado.filter(x => x.estado === 'falta' && !x.intentos).length, sinAprobar = n.falta - nunca;
   const pct = v => n[''] ? `${Math.round(v / n[''] * 100)}% de la lista` : '';
   const kpi = (k, ico, num, lbl, sub) => `<div class="rh-kpi k-${k}"><span class="rh-kpi-ico">${icon(ico)}</span><span><span class="rh-kpi-num">${num}</span><span class="rh-kpi-lbl">${lbl}</span><span class="rh-kpi-sub">${sub}</span></span></div>`;
   document.getElementById('ced-kpis').innerHTML =
-    kpi('total', 'id-card',      f(n['']),     'Cédulas',         'en la lista pegada') +
-    kpi('ok',    'check-circle', f(n.ok),      'Con certificado', pct(n.ok)) +
-    kpi('bad',   'x-circle',     f(n.reprobo), 'No aprobaron',    pct(n.reprobo)) +
-    kpi('pend',  'clock',        f(n.sin),     'Sin inducción',   pct(n.sin));
+    kpi('total', 'id-card',      f(n['']),   'Cédulas',         'en la lista pegada') +
+    kpi('ok',    'check-circle', f(n.ok),    'Con certificado', pct(n.ok)) +
+    kpi('bad',   'x-circle',     f(n.falta), 'Sin certificado',
+        n.falta ? `${f(nunca)} no la ${nunca === 1 ? 'ha' : 'han'} presentado · ${f(sinAprobar)} sin aprobar` : pct(n.falta));
 
   const av = _cedAvisos, partes = [];
   if(av.repetidas) partes.push(`${f(av.repetidas)} cédula${av.repetidas === 1 ? '' : 's'} repetida${av.repetidas === 1 ? '' : 's'}`);
@@ -3748,7 +3759,7 @@ function pintarCedulas() {
   nota.hidden = !partes.length;
   nota.innerHTML = partes.length ? 'Se ignoraron ' + (partes.length > 1 ? partes.slice(0, -1).join(', ') + ' y ' + partes[partes.length - 1] : partes[0]) + '.' : '';
 
-  const pestanas = [['', 'Todos'], ['ok', 'Con certificado'], ['reprobo', 'No aprobaron'], ['sin', 'Sin inducción']];
+  const pestanas = [['', 'Todos'], ['ok', 'Con certificado'], ['falta', 'Sin certificado']];
   document.getElementById('ced-tabs').innerHTML = pestanas.map(([v, l]) =>
     `<button class="rh-stab ${_cedFiltro === v ? 'is-on' : ''}" onclick="filtrarCedulas('${v}')">${l} <span class="rh-stab-n">(${f(n[v])})</span></button>`).join('');
 
@@ -3761,21 +3772,24 @@ function pintarCedulas() {
     const nombre = !nombreTxt ? '<span class="rh-muted">—</span>'
       : r ? `<button class="rh-link" onclick="openDrawer('${r.id}')">${escapeHtml(nombreTxt)}</button>` : escapeHtml(nombreTxt);
     const tipo = r ? `<span class="rh-pill ${r.tipo === 'Reinduccion' ? 'rh-pill-violet' : 'rh-pill-blue'}">${r.tipo === 'Reinduccion' ? 'Reinducción' : 'Inducción'}</span>` : '';
-    const notaTxt = x.estado === 'reprobo' ? ` (${Math.round(Number(r.nota) || 0)}%)` : '';
+    const motivo = motivoCed(x);
     return `<tr>
       <td data-label="Cédula" class="rh-nowrap">${escapeHtml(fmtCedula(x.cedula))}</td>
       <td data-label="Trabajador">${nombre}</td>
       <td data-label="Entidad">${r ? `<span class="rh-trunc" title="${escapeHtml(entidad)}">${escapeHtml(entidad || '—')}</span>` : '<span class="rh-muted">—</span>'}</td>
       <td data-label="Fecha" class="rh-nowrap">${r ? escapeHtml(shortFecha(r.fecha)) : ''}</td>
       <td data-label="Tipo">${tipo}</td>
-      <td data-label="Estado"><span class="rh-status ${e.pill}">${icon(e.ico)}${e.etiqueta}${notaTxt}</span></td>
+      <td data-label="Estado"><span class="rh-status ${e.pill}">${icon(e.ico)}${e.etiqueta}</span>${motivo ? `<div class="rh-ced-motivo">${escapeHtml(motivo)}</div>` : ''}</td>
     </tr>`;
   }).join('') || `<tr><td colspan="6" class="rh-muted">No hay cédulas en este grupo.</td></tr>`;
 
   const descargar = document.getElementById('ced-descargar');
   descargar.disabled = !n.ok;
   descargar.innerHTML = `${icon('download')}Descargar ${f(n.ok)} certificado${n.ok === 1 ? '' : 's'}`;
-  document.getElementById('ced-copiar').disabled = !(n.reprobo + n.sin);
+  document.getElementById('ced-copiar').disabled = !n.falta;
+  const faltantes = document.getElementById('ced-faltantes');
+  faltantes.disabled = !n.falta;
+  faltantes.innerHTML = `${icon('sheet')}Descargar ${f(n.falta)} faltante${n.falta === 1 ? '' : 's'}`;
 }
 function filtrarCedulas(v) { _cedFiltro = v; pintarCedulas(); }
 function limpiarCedulas() {
@@ -3793,25 +3807,42 @@ function descargarPorCedula() {
 // Copia nombre, cédula y motivo separados por tabulación: en Excel quedan en
 // columnas y en WhatsApp o un correo se leen como una lista.
 async function copiarFaltantes() {
-  const faltan = _cedResultado.filter(x => x.estado !== 'ok');
-  if(!faltan.length) { showToast('No hay personas faltantes'); return; }
-  const motivo = x => x.estado === 'reprobo' ? `No aprobó (${Math.round(Number(x.rec.nota) || 0)}%)` : ESTADOS_CED[x.estado].etiqueta;
-  const lineas = faltan.map(x => [x.nombre || (x.rec && x.rec.name) || '', x.cedula, motivo(x)].join('\t'));
+  const faltan = _cedResultado.filter(x => x.estado === 'falta');
+  if(!faltan.length) { showToast('No hay personas sin certificado'); return; }
+  const lineas = faltan.map(x => [x.nombre || (x.rec && x.rec.name) || '', x.cedula, motivoCed(x)].join('\t'));
   try {
     await navigator.clipboard.writeText(lineas.join('\n'));
     showToast(`📋 ${faltan.length.toLocaleString('es-CO')} persona${faltan.length === 1 ? '' : 's'} copiada${faltan.length === 1 ? '' : 's'}: nombre, cédula y motivo`);
   } catch(e) { showToast('⚠️ No se pudo copiar. Use "Exportar Excel".'); }
 }
-function exportarCedulas() {
-  if(!_cedResultado.length) return;
-  const filas = [['Cédula', 'Trabajador', 'Entidad / Edificio', 'Cargo', 'Fecha', 'Tipo', 'Nota (%)', 'Resultado']];
-  _cedResultado.forEach(x => {
+// Excel solo con quienes no tienen certificado, en columnas para ordenar y filtrar.
+function descargarFaltantes() {
+  const faltan = _cedResultado.filter(x => x.estado === 'falta');
+  if(!faltan.length) { showToast('No hay personas sin certificado'); return; }
+  const filas = [['Trabajador', 'Cédula', 'Motivo', 'Intentos', 'Mejor nota (%)', 'Último intento', 'Entidad / Edificio', 'Cargo']];
+  faltan.forEach(x => {
     const r = x.rec;
-    filas.push([x.cedula, x.nombre || (r && r.name) || '', r ? (r.edificio || r.dep || '') : '', r ? r.cargo || '' : '', r ? r.fecha || '' : '',
-      r ? (r.tipo === 'Reinduccion' ? 'Reinducción' : 'Inducción') : '', r ? Number(r.nota) || 0 : '', ESTADOS_CED[x.estado].etiqueta]);
+    filas.push([x.nombre || (r && r.name) || '', x.cedula, x.intentos ? 'Presentó sin aprobar' : 'No la ha presentado',
+      x.intentos || 0, x.intentos ? x.mejorNota : '', r ? r.fecha || '' : '', r ? (r.edificio || r.dep || '') : '', r ? r.cargo || '' : '']);
   });
   const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(filas);
-  ws['!cols'] = [{wch:14},{wch:32},{wch:30},{wch:26},{wch:22},{wch:13},{wch:9},{wch:16}];
+  ws['!cols'] = [{wch:34},{wch:14},{wch:22},{wch:9},{wch:14},{wch:24},{wch:32},{wch:28}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Sin certificado');
+  XLSX.writeFile(wb, 'Sin_certificado_' + isoLocal(new Date()) + '.xlsx');
+  showToast(`✅ Excel con ${faltan.length.toLocaleString('es-CO')} persona${faltan.length === 1 ? '' : 's'} sin certificado`);
+}
+function exportarCedulas() {
+  if(!_cedResultado.length) return;
+  const filas = [['Cédula', 'Trabajador', 'Entidad / Edificio', 'Cargo', 'Fecha', 'Tipo', 'Nota (%)', 'Resultado', 'Detalle']];
+  _cedResultado.forEach(x => {
+    const r = x.rec;
+    // Nota: la del certificado; si nunca aprobó, la mejor que sacó.
+    const notaExcel = x.estado === 'ok' ? Number(r.nota) || 0 : (x.intentos ? x.mejorNota : '');
+    filas.push([x.cedula, x.nombre || (r && r.name) || '', r ? (r.edificio || r.dep || '') : '', r ? r.cargo || '' : '', r ? r.fecha || '' : '',
+      r ? (r.tipo === 'Reinduccion' ? 'Reinducción' : 'Inducción') : '', notaExcel, ESTADOS_CED[x.estado].etiqueta, motivoCed(x)]);
+  });
+  const wb = XLSX.utils.book_new(), ws = XLSX.utils.aoa_to_sheet(filas);
+  ws['!cols'] = [{wch:14},{wch:32},{wch:30},{wch:26},{wch:22},{wch:13},{wch:9},{wch:16},{wch:36}];
   XLSX.utils.book_append_sheet(wb, ws, 'Certificados por cédula');
   XLSX.writeFile(wb, 'Certificados_por_cedula_' + isoLocal(new Date()) + '.xlsx');
   showToast('✅ Excel descargado');
