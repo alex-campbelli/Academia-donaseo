@@ -54,10 +54,16 @@ label{display:block;font-size:.8rem;font-weight:600;color:var(--text-2);margin:1
 </div>
 <script>
 // Pantalla para crear la contraseña desde el enlace de recuperación (o de
-// invitación) que envía Supabase. Sirve para todos los sistemas de Don Aseo,
-// porque comparten los mismos usuarios.
-const SUPABASE_URL      = 'https://nqkiepqaujlgmkvsevdr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xa2llcHFhdWpsZ21rdnNldmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDI5NzEsImV4cCI6MjA5NDQxODk3MX0._UxBdDky3VIfnGQHGXXeAG3okQY4kflGtbff7pbPfrI';
+// invitación) que envía Supabase. Atiende los dos proyectos de Don Aseo: el
+// token del enlace dice de cuál viene.
+// Proyectos de Supabase que atiende esta pantalla. Las llaves son las públicas
+// (las mismas que cada sistema ya usa en el navegador).
+const PROYECTOS = {
+  // sig-don-aseo: academia, panel, firmas
+  nqkiepqaujlgmkvsevdr: { url: 'https://nqkiepqaujlgmkvsevdr.supabase.co', llave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xa2llcHFhdWpsZ21rdnNldmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDI5NzEsImV4cCI6MjA5NDQxODk3MX0._UxBdDky3VIfnGQHGXXeAG3okQY4kflGtbff7pbPfrI' },
+  // rh-don-aseo: empleados
+  eimprmejytunsgzazdkh: { url: 'https://eimprmejytunsgzazdkh.supabase.co', llave: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpbXBybWVqeXR1bnNnemF6ZGtoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAxMjc4NDEsImV4cCI6MjA5NTcwMzg0MX0.IG7Ou9YcIMQn7TdHd5WJuhNvAKL-LqVmuxWfkEo1_wQ' }
+};
 
 // Lo que llega en el enlace (#access_token=…&type=recovery) se lee antes de
 // crear el cliente; después se borra de la barra de direcciones.
@@ -65,6 +71,17 @@ const datosEnlace = new URLSearchParams(location.hash.replace(/^#/, ''));
 const tipoEnlace  = datosEnlace.get('type');
 const errorEnlace = datosEnlace.get('error_code') || datosEnlace.get('error');
 let sb = null;
+
+// El token del enlace trae en "iss" la dirección del proyecto que lo emitió.
+function proyectoDelEnlace() {
+  const token = datosEnlace.get('access_token');
+  if (!token) return null;
+  try {
+    const b64 = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const carga = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b64), c => c.charCodeAt(0))));
+    return PROYECTOS[new URL(carga.iss).hostname.split('.')[0]] || null;
+  } catch (e) { return null; }
+}
 
 const OJO = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
 const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
@@ -79,15 +96,24 @@ function enlaceVencido() {
 
 async function iniciar() {
   if (errorEnlace) { history.replaceState(null, '', location.pathname); enlaceVencido(); return; }
+  const proyecto = proyectoDelEnlace();
   // La sesión del enlace vive solo en memoria: no queda guardada en este navegador.
-  sb = sb || window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: true, flowType: 'implicit' }
-  });
+  if (!sb && proyecto) {
+    sb = window.supabase.createClient(proyecto.url, proyecto.llave, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: true, flowType: 'implicit' }
+    });
+  }
   let sesion = null;
-  try { sesion = (await sb.auth.getSession()).data.session; } catch (e) {}
+  if (sb) { try { sesion = (await sb.auth.getSession()).data.session; } catch (e) {} }
   if (location.hash) history.replaceState(null, '', location.pathname);
   if (sesion && (tipoEnlace === 'recovery' || tipoEnlace === 'invite')) {
     mostrarFormulario(sesion.user && sesion.user.email, tipoEnlace === 'invite');
+  } else if (sesion) {
+    // Confirmación de correo (cuenta nueva o cambio de correo) u otro enlace válido.
+    try { await sb.auth.signOut({ scope: 'local' }); } catch (e) {}
+    const confirmacion = tipoEnlace === 'signup' || tipoEnlace === 'email' || tipoEnlace === 'email_change';
+    vistaEstado('ok', '✓', confirmacion ? 'Tu correo quedó confirmado' : 'Enlace verificado',
+      'Ya puedes iniciar sesión en el sistema con tu correo y tu contraseña. Puedes cerrar esta página.');
   } else if (tipoEnlace) {
     enlaceVencido();
   } else {
