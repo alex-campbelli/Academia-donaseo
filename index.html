@@ -877,6 +877,34 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 }
 .rh-pills{display:flex;flex-wrap:wrap;gap:4px}
 .rh-pills .rh-pill+.rh-pill{margin-left:0}
+
+/* Progreso de la descarga de certificados */
+.rh-page-head>div:first-child{flex:1 1 320px;min-width:0}
+.rh-page-actions{align-items:center}
+.rh-progress{display:flex;align-items:center;gap:10px;width:280px;padding:8px 6px 8px 12px;border:1px solid var(--rh-border);border-radius:var(--rh-r-sm);background:#fff;box-shadow:var(--rh-sh)}
+.rh-progress[hidden]{display:none}
+.rh-progress-ico{width:22px;height:22px;flex-shrink:0;display:grid;place-items:center;color:var(--rh-primary)}
+.rh-progress-ico svg.rh-i{width:20px;height:20px}
+.rh-spin{display:block;width:18px;height:18px;border-radius:50%;border:2.5px solid #d6e2f5;border-top-color:var(--rh-primary);animation:rhSpin .8s linear infinite}
+.rh-progress-body{flex:1;min-width:0;display:grid;gap:4px}
+.rh-progress-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;font-size:.8rem;line-height:1.2}
+.rh-progress-top strong{font-weight:600;color:var(--rh-text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rh-progress-top span{font-weight:700;color:var(--rh-primary);font-variant-numeric:tabular-nums}
+.rh-progress-track{display:block;height:5px;border-radius:999px;background:#e9eef5;overflow:hidden}
+.rh-progress-track>span{display:block;height:100%;width:0;border-radius:inherit;background:var(--rh-primary);transition:width .3s ease}
+.rh-progress small{font-size:.72rem;color:var(--rh-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.rh-progress-x{width:30px;height:30px;flex-shrink:0}
+.rh-progress-x[hidden]{display:none}
+.rh-progress.is-ok .rh-progress-ico{color:var(--rh-ok-bar)}
+.rh-progress.is-ok .rh-progress-track>span{background:var(--rh-ok-bar)}
+.rh-progress.is-ok .rh-progress-top span{color:var(--rh-ok)}
+.rh-progress.is-bad .rh-progress-ico{color:var(--rh-bad-bar)}
+.rh-progress.is-bad .rh-progress-track>span{background:var(--rh-bad-bar)}
+.rh-progress.is-off .rh-progress-ico{color:var(--rh-muted)}
+.rh-progress.is-off .rh-progress-track>span{background:#9aa9bf}
+.rh-topbar .rh-topline{position:absolute;left:0;bottom:-1px;height:3px;width:0;background:var(--rh-primary);transition:width .3s ease;pointer-events:none}
+.rh-topline[hidden]{display:none}
+@keyframes rhSpin{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
@@ -912,7 +940,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
     <p class="login-tagline">Diligencie sus datos para comenzar. El sistema verificará su proceso e iniciará los 12 módulos de inducción.</p>
     <div class="form-row">
       <div class="form-group"><label>Nombre completo</label><input type="text" id="ln-name" placeholder="Nombres y apellidos"></div>
-      <div class="form-group"><label>N.° de cédula</label><input type="number" id="ln-cedula" placeholder="Ej. 1094823456"></div>
+      <div class="form-group"><label>N.° de cédula</label><input type="text" inputmode="numeric" autocomplete="off" maxlength="15" id="ln-cedula" placeholder="Ej. 1094823456" oninput="this.value=this.value.replace(/\D/g,'')"></div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha de expedición</label><input type="date" id="ln-fecexp"></div>
@@ -1043,6 +1071,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 
   <div class="rh-main">
     <header class="rh-topbar">
+      <span class="rh-topline" id="rh-topline" hidden></span>
       <button class="rh-icon-btn rh-burger" onclick="toggleSidebar()" aria-label="Abrir menú"><i data-icon="menu"></i></button>
       <div class="rh-crumb">Talento Humano / <strong id="rh-crumb-cur">Inducciones</strong></div>
       <div class="rh-user">
@@ -1066,6 +1095,15 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
           <p class="rh-subtitle" id="rh-page-sub">Consulta, seguimiento y control de las evaluaciones realizadas.</p>
         </div>
         <div class="rh-page-actions" id="rh-page-actions">
+          <div class="rh-progress" id="rh-progress" role="status" aria-live="polite" hidden>
+            <span class="rh-progress-ico" id="rh-progress-ico" aria-hidden="true"></span>
+            <div class="rh-progress-body">
+              <div class="rh-progress-top"><strong id="rh-progress-title"></strong><span id="rh-progress-pct"></span></div>
+              <span class="rh-progress-track" aria-hidden="true"><span id="rh-progress-bar"></span></span>
+              <small id="rh-progress-sub"></small>
+            </div>
+            <button class="rh-icon-btn rh-progress-x" id="rh-progress-x" onclick="accionProgreso()" title="Cancelar" aria-label="Cancelar la descarga de certificados"><i data-icon="x"></i></button>
+          </div>
           <button class="rh-btn" onclick="renderAdmin()"><i data-icon="refresh"></i>Actualizar</button>
           <button class="rh-btn" onclick="exportCSV()"><i data-icon="sheet"></i>Exportar Excel</button>
         </div>
@@ -1122,7 +1160,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
           <span id="bulk-count"></span>
           <button class="rh-link" id="bulk-select-all" onclick="selectAllFiltered()" hidden></button>
           <span class="rh-bulk-spacer"></span>
-          <button class="rh-btn rh-btn-sm" onclick="downloadSelected()"><i data-icon="download"></i>Descargar certificados</button>
+          <button class="rh-btn rh-btn-sm" id="bulk-dl-btn" onclick="downloadSelected()"><i data-icon="download"></i>Descargar certificados</button>
           <button class="rh-btn rh-btn-sm rh-btn-danger" id="bulk-del-btn" onclick="deleteSelected()"><i data-icon="trash"></i>Eliminar</button>
           <button class="rh-icon-btn" onclick="clearSelection()" aria-label="Quitar selección"><i data-icon="x"></i></button>
         </div>
@@ -1504,7 +1542,9 @@ async function doAdminLogout() {
 // ═══════════════════════════════════════
 async function doLogin() {
   const name    = document.getElementById('ln-name').value.trim();
-  const cedula  = document.getElementById('ln-cedula').value.trim();
+  // Solo números y sin ceros a la izquierda: "01.051.734.455" y "1051734455"
+  // son la misma cédula (el servidor aplica la misma limpieza).
+  const cedula  = document.getElementById('ln-cedula').value.replace(/\D/g,'').replace(/^0+/,'');
   const fecexp  = document.getElementById('ln-fecexp').value.trim();
   const celular = document.getElementById('ln-celular').value.trim();
   const dept    = document.getElementById('ln-dept').value;
@@ -1685,6 +1725,9 @@ function completeMod(idx) {
 // TEST
 // ═══════════════════════════════════════
 function startTest() {
+  // Quien ya aprobó en esta sesión no vuelve a presentar la evaluación:
+  // "Repasar Módulos" queda solo para leer.
+  if(user && user.aprobado) { showToast('✅ Usted ya aprobó la evaluación'); showScreen('result'); return; }
   const shuffled=[...ALL_QUESTIONS].sort(()=>Math.random()-.5);
   testQs=shuffled.slice(0,6); curQ=0; answers=Array(6).fill(null);
   showScreen('test'); renderQ();
@@ -1721,7 +1764,13 @@ function selectA(i) { if(answers[curQ]!==null) return; answers[curQ]=i; renderQ(
 function nextQ() { if(curQ<testQs.length-1){ curQ++; renderQ(); } }
 function prevQ() { if(curQ>0){ curQ--; renderQ(); } }
 
+// El certificado solo se entrega cuando el servidor confirmó el registro. Así
+// cada certificado tiene su registro y la regla de una sola inducción se
+// cumple aunque falle la conexión o se toque dos veces el botón.
+let _guardandoResultado = false, _resultadoPendiente = null;
+
 async function showResults() {
+  if(_guardandoResultado) return;   // doble toque en "Ver Resultados"
   const correct=answers.filter((a,i)=>a===testQs[i].c).length;
   const pct=Math.round(correct/testQs.length*100);
   const passed=pct>=80;
@@ -1732,41 +1781,84 @@ async function showResults() {
     edificio:user.edificio||'', celular:user.celular||'',
     fec_expedicion:user.fecexp||'', ciudad:user.ciudad||'', departamento:user.departamento||''
   };
+  _resultadoPendiente = { rec, correct };
+  await guardarResultado();
+}
 
-  const saved = await apiSave(rec);
+// Guarda el resultado pendiente. Si falla la conexión reintenta solo dos veces
+// más; el reintento usa el mismo envío, así que el servidor no lo duplica.
+async function guardarResultado() {
+  if(_guardandoResultado || !_resultadoPendiente) return;
+  _guardandoResultado = true;
+  const { rec, correct } = _resultadoPendiente;
+  showScreen('result');
+  document.getElementById('result-area').innerHTML = `
+    <div class="result-card">
+      <div class="ri">⏳</div>
+      <h2>Guardando su resultado…</h2>
+      <p>No cierre esta página.</p>
+    </div>`;
+  let saved = null;
+  for(let intento = 0; intento < 3; intento++) {
+    if(intento) await new Promise(r => setTimeout(r, 1500 * intento));
+    saved = await apiSave(rec);
+    if(saved && saved.error !== 'conexion') break;
+  }
+  _guardandoResultado = false;
 
   if(saved && saved.ok) {
+    _resultadoPendiente = null;
     // El servidor es quien decide el tipo; el certificado debe reflejar
     // lo que realmente quedó guardado.
     if(saved.tipo) { rec.tipo = saved.tipo; user.tipo = saved.tipo; }
+    if(rec.passed) user.aprobado = true;
+    // Referencia para saber a qué registro pertenece el certificado descargado.
+    user.id = rec.id;
+    records.push(rec);
+    localSave();
+    pintarResultado(rec, correct, 'ok');
+  } else if(saved && saved.error === 'ya_registrado') {
+    // Ya tiene una inducción aprobada: no se entrega otro certificado.
+    _resultadoPendiente = null;
+    showBlockedScreen(null, user.name);
   } else {
-    const motivo = saved && saved.error === 'ya_registrado'
-      ? '⚠️ Esta cédula ya tiene una inducción registrada'
-      : '⚠️ No se pudo guardar el registro. Informe a Recursos Humanos.';
-    showToast(motivo);
+    // Sin registro no hay certificado. Si fue la conexión, puede reintentar.
+    pintarResultado(rec, correct, saved && saved.error === 'conexion' ? 'reintentar' : 'error');
   }
+}
 
-  // Referencia para saber a qué registro pertenece el certificado descargado.
-  user.id = rec.id;
-  records.push(rec);
-  localSave();
-  showScreen('result');
+function pintarResultado(rec, correct, estado) {
+  const passed = rec.passed, guardado = estado === 'ok';
+  const repasar = `<button class="btn-act out" onclick="renderWelcome();showScreen('induction');">📚 Repasar Módulos</button>`;
+  let titulo, texto, acciones;
+  if(guardado) {
+    titulo = passed ? '¡Felicitaciones, '+escapeHtml(user.name.split(' ')[0])+'!' : '¡Sigue Adelante!';
+    texto = passed ? 'Ha aprobado satisfactoriamente el Proceso de Inducción Corporativa de DON ASEO LTDA. Puede descargar su certificado oficial.' : 'No alcanzó el puntaje mínimo del 80%. Puede repetir la evaluación.';
+    acciones = passed
+      ? `<button class="btn-act gold" onclick="generateCert()">📄 Descargar Certificado PDF</button>
+             <a class="btn-act teal" href="https://drive.google.com/file/d/1shMp5QSNgI_SUe-J4GsQcGl97x3IJcGr/view?usp=sharing" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:7px;">📋 Descargar Reglamento Interno</a>
+             ${repasar}`
+      : `<button class="btn-act teal" onclick="startTest()">🔁 Repetir Evaluación</button>
+             ${repasar}`;
+  } else if(estado === 'reintentar') {
+    titulo = 'No se pudo guardar su resultado';
+    texto = 'Revise su conexión a internet y pulse "Reintentar".' + (passed ? ' El certificado se habilita cuando el resultado quede guardado.' : '');
+    acciones = `<button class="btn-act gold" onclick="guardarResultado()">🔄 Reintentar</button>`;
+  } else {
+    titulo = 'No se pudo guardar su resultado';
+    texto = 'Informe a Recursos Humanos para completar su registro.';
+    acciones = repasar;
+  }
   document.getElementById('result-area').innerHTML=`
     <div class="result-card">
-      <div class="ri">${passed?'🏆':'💪'}</div>
+      <div class="ri">${guardado ? (passed?'🏆':'💪') : '⚠️'}</div>
       <div class="score-ring ${passed?'pass':'fail'}">
-        <div class="sn">${pct}%</div><div class="sl">${correct}/${testQs.length}</div>
+        <div class="sn">${rec.nota}%</div><div class="sl">${correct}/${testQs.length}</div>
       </div>
-      <h2>${passed?'¡Felicitaciones, '+user.name.split(' ')[0]+'!':'¡Sigue Adelante!'}</h2>
-      <p>${passed?'Ha aprobado satisfactoriamente el Proceso de Inducción Corporativa de DON ASEO LTDA. Puede descargar su certificado oficial.':'No alcanzó el puntaje mínimo del 80%. Puede repetir la evaluación.'}</p>
+      <h2>${titulo}</h2>
+      <p>${texto}</p>
       <div class="res-actions">
-        ${passed
-          ?`<button class="btn-act gold" onclick="generateCert()">📄 Descargar Certificado PDF</button>
-             <a class="btn-act teal" href="https://drive.google.com/file/d/1shMp5QSNgI_SUe-J4GsQcGl97x3IJcGr/view?usp=sharing" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;align-items:center;gap:7px;">📋 Descargar Reglamento Interno</a>
-             <button class="btn-act out" onclick="renderWelcome();showScreen('induction');">📚 Repasar Módulos</button>`
-          :`<button class="btn-act teal" onclick="startTest()">🔁 Repetir Evaluación</button>
-             <button class="btn-act out" onclick="renderWelcome();showScreen('induction');">📚 Repasar Módulos</button>`
-        }
+        ${acciones}
       </div>
     </div>`;
 }
@@ -2731,6 +2823,8 @@ function updateBulkBar() {
   if(cnt) cnt.innerHTML = `<strong>${n.toLocaleString('es-CO')}</strong> seleccionado${n === 1 ? '' : 's'}`;
   const del = document.getElementById('bulk-del-btn');
   if(del) del.style.display = adminRole === 'admin' ? '' : 'none';
+  const dl = document.getElementById('bulk-dl-btn');
+  if(dl) { dl.disabled = _zipEnCurso; dl.title = _zipEnCurso ? 'Se están generando certificados…' : ''; }
   const todos = document.getElementById('bulk-select-all');
   if(todos) {
     const filt = getFilteredRecords();
@@ -2939,39 +3033,130 @@ function deleteSelected() {
 }
 
 // ── DOWNLOAD SELECTED CERTS ──
+// ═══════════════════════════════════════
+// PROGRESO DE LA DESCARGA DE CERTIFICADOS
+// ═══════════════════════════════════════
+// Indicador fijo junto a "Actualizar" y una línea en la barra superior, que
+// sigue a la vista aunque se baje en la página.
+let _zipEnCurso = false, _zipCancelado = false, _progresoTimer = null;
+
+// estado: generando | comprimiendo | listo | cancelado | error
+function progresoCert(estado, o) {
+  const box = document.getElementById('rh-progress');
+  if(!box) return;
+  const $ = id => document.getElementById(id);
+  const enCurso = estado === 'generando' || estado === 'comprimiendo';
+  const pct = Math.max(0, Math.min(100, Math.round(o.pct || 0)));
+  clearTimeout(_progresoTimer);
+  if(box.dataset.estado !== estado) {
+    box.dataset.estado = estado;
+    box.classList.toggle('is-ok', estado === 'listo');
+    box.classList.toggle('is-bad', estado === 'error');
+    box.classList.toggle('is-off', estado === 'cancelado');
+    $('rh-progress-ico').innerHTML = enCurso ? '<span class="rh-spin"></span>'
+      : icon(estado === 'listo' ? 'check-circle' : estado === 'error' ? 'x-circle' : 'alert');
+    const x = $('rh-progress-x');
+    x.hidden = estado === 'comprimiendo';   // el ZIP final ya no se puede detener
+    x.disabled = false;
+    x.title = enCurso ? 'Cancelar' : 'Cerrar';
+    x.setAttribute('aria-label', enCurso ? 'Cancelar la descarga de certificados' : 'Cerrar aviso');
+  }
+  box.hidden = false;
+  $('rh-progress-title').textContent = o.titulo || '';
+  $('rh-progress-pct').textContent = estado === 'error' || estado === 'cancelado' ? '' : pct + '%';
+  $('rh-progress-bar').style.width = pct + '%';
+  $('rh-progress-sub').textContent = o.sub || '';
+  const linea = $('rh-topline');
+  if(linea) { linea.hidden = !enCurso; linea.style.width = pct + '%'; }
+  if(!enCurso) _progresoTimer = setTimeout(cerrarProgreso, estado === 'error' ? 10000 : 6000);
+}
+function cerrarProgreso() {
+  clearTimeout(_progresoTimer);
+  const box = document.getElementById('rh-progress');
+  if(box) { box.hidden = true; delete box.dataset.estado; }
+  const linea = document.getElementById('rh-topline');
+  if(linea) linea.hidden = true;
+}
+// La X cancela mientras se generan los PDF; cuando ya terminó, cierra el aviso.
+function accionProgreso() {
+  if(!_zipEnCurso) { cerrarProgreso(); return; }
+  _zipCancelado = true;
+  const x = document.getElementById('rh-progress-x'), sub = document.getElementById('rh-progress-sub');
+  if(x) x.disabled = true;
+  if(sub) sub.textContent = 'Cancelando…';
+}
+function textoRestante(hechos, total, inicio) {
+  if(hechos < 3) return 'Calculando tiempo…';
+  const seg = (Date.now() - inicio) / hechos * (total - hechos) / 1000;
+  return seg < 60 ? `quedan ~${Math.max(5, Math.ceil(seg / 5) * 5)} s` : `quedan ~${Math.ceil(seg / 60)} min`;
+}
+// Nombre único dentro del ZIP. Si dos registros comparten nombre se agrega la
+// cédula (y un número si aún coincide); antes el segundo reemplazaba al primero.
+// La comparación ignora mayúsculas porque Windows no las distingue.
+function nombreArchivoZip(r, usados) {
+  const limpio = t => String(t || '').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
+  const base = 'Certificado_' + (limpio(r.name) || 'sin_nombre');
+  let nombre = base, n = 2;
+  if(usados.has(nombre.toLowerCase())) nombre = base + '_' + limpio(r.cedula);
+  while(usados.has(nombre.toLowerCase())) nombre = base + '_' + limpio(r.cedula) + '_' + n++;
+  usados.add(nombre.toLowerCase());
+  return nombre + '.pdf';
+}
+
 async function downloadSelected() {
+  if(_zipEnCurso) { showToast('⏳ Ya se están generando certificados'); return; }
   const toDownload=[...selectedIds].map(id=>records.find(r=>String(r.id)===String(id))).filter(r=>r&&r.passed);
   if(!toDownload.length){ showToast('No hay registros aprobados seleccionados'); return; }
   if(toDownload.length===1) {
     // Single cert — download directly
     const savedUser=user; user={...toDownload[0]}; generateCert(); user=savedUser; return;
   }
-  // Multiple certs — generate ZIP
-  showToast(`📦 Generando ZIP con ${toDownload.length} certificados...`);
+  // Varios certificados: se generan uno a uno y se entregan en un ZIP.
+  // La barra reparte 95% a generar los PDF y 5% a armar el ZIP.
   const zip = new JSZip();
   const savedUser = user;
+  const total = toDownload.length, inicio = Date.now(), usados = new Set();
   let generated = 0;
+  _zipEnCurso = true; _zipCancelado = false;
+  updateBulkBar();
+  progresoCert('generando', { titulo:`Certificados 0 de ${total}`, sub:'Preparando…', pct:0 });
+  const terminar = () => { user = savedUser; _zipEnCurso = false; _zipCancelado = false; updateBulkBar(); };
   function generateNext(idx) {
+    if(_zipCancelado) {
+      terminar();
+      progresoCert('cancelado', { titulo:'Descarga cancelada', sub:`Se detuvo en ${generated} de ${total}; no se descargó nada`, pct: generated / total * 95 });
+      return;
+    }
     if(idx >= toDownload.length) {
-      // All done — save ZIP
-      zip.generateAsync({type:'blob'}).then(blob => {
+      // Todos listos: se arma el ZIP y se descarga
+      let ultimo = -1;
+      const armando = pct => progresoCert('comprimiendo', { titulo:`Armando el ZIP (${total} certificados)`, sub:'Casi listo…', pct: 95 + pct * 0.05 });
+      armando(0);
+      zip.generateAsync({type:'blob'}, meta => {
+        const p = Math.floor(meta.percent);
+        if(p !== ultimo) { ultimo = p; armando(p); }
+      }).then(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = 'Certificados_DON_ASEO_' + new Date().toISOString().slice(0,10) + '.zip';
         a.click();
         URL.revokeObjectURL(a.href);
-        user = savedUser;
-        showToast(`✅ ZIP descargado con ${toDownload.length} certificados`);
+        terminar();
+        progresoCert('listo', { titulo:`${total} certificados listos`, sub:'El ZIP se descargó', pct:100 });
+        showToast(`✅ ZIP descargado con ${total} certificados`);
+      }).catch(e => {
+        console.error('No se pudo crear el ZIP de certificados:', e);
+        terminar();
+        progresoCert('error', { titulo:'No se pudo crear el ZIP', sub:'Intenta de nuevo con menos registros' });
       });
       return;
     }
     user = {...toDownload[idx]};
     // Build PDF as blob and add to ZIP
     buildPDFasBlob(function(blob) {
-      const filename = 'Certificado_' + user.name.replace(/ /g,'_') + '.pdf';
-      zip.file(filename, blob);
+      zip.file(nombreArchivoZip(user, usados), blob);
       generated++;
-      showToast(`📄 Generando ${generated}/${toDownload.length}...`);
+      progresoCert('generando', { titulo:`Certificados ${generated} de ${total}`, sub: _zipCancelado ? 'Cancelando…' : textoRestante(generated, total, inicio), pct: generated / total * 95 });
       setTimeout(()=>generateNext(idx+1), 300);
     });
   }
@@ -2986,6 +3171,8 @@ function buildPDFasBlob(callback) {
 }
 
 function regenCert(id) {
+  // generateCert usa la variable global "user": no puede correr en paralelo con el ZIP
+  if(_zipEnCurso) { showToast('⏳ Espera a que termine la descarga de certificados'); return; }
   const rec=records.find(r=>String(r.id)===String(id));
   if(!rec||!rec.passed) return;
   const savedUser = user;
@@ -3304,10 +3491,14 @@ const ALL_QUESTIONS = [
 // ═══════════════════════════════════════
 // TOAST
 // ═══════════════════════════════════════
+// Un aviso nuevo reinicia el tiempo del anterior. Antes cada aviso dejaba su
+// propio temporizador y los viejos ocultaban a los nuevos (parpadeo).
+let _toastTimer = null;
 function showToast(msg) {
   const t=document.getElementById('toast');
   t.textContent=msg; t.classList.add('show');
-  setTimeout(()=>t.classList.remove('show'),3200);
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(()=>t.classList.remove('show'),3200);
 }
 
 
