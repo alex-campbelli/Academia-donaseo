@@ -933,6 +933,13 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 .rh-alert.rh-cli-aviso{margin:14px 20px 0}
 .rh-alert[hidden]{display:none}
 .rh-cli-nombre{font-weight:600;color:var(--rh-text)}
+/* Papelera e historial */
+.rh-alert.rh-card-aviso{margin:14px 20px 0}
+.rh-pap-table .rh-person-name{max-width:none}
+.rh-hist{list-style:none;display:grid;gap:8px;margin:0;padding:0}
+.rh-hist li{padding:10px 12px;border-radius:10px;background:#f6f8fc;border:1px solid var(--rh-border)}
+.rh-hist-que{font-size:.82rem;color:var(--rh-text);line-height:1.45}
+.rh-hist-quien{font-size:.72rem;color:var(--rh-muted);margin-top:3px}
 </style>
 </head>
 <body>
@@ -1089,6 +1096,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
       <button class="rh-nav-item" id="nav-ced" onclick="navTo('ced')"><i data-icon="id-card"></i><span>Certificados por cédula</span></button>
       <div class="rh-nav-sep" data-admin-only hidden></div>
       <button class="rh-nav-item" id="nav-cli" onclick="navTo('cli')" data-admin-only hidden><i data-icon="building"></i><span>Clientes</span></button>
+      <button class="rh-nav-item" id="nav-pap" onclick="navTo('pap')" data-admin-only hidden><i data-icon="trash"></i><span>Papelera</span></button>
       <button class="rh-nav-item" id="nav-usr" onclick="navTo('usr')" data-admin-only hidden><i data-icon="settings"></i><span>Configuración</span></button>
     </nav>
     <div class="rh-sidebar-foot">Un entorno limpio<br>crea un mejor futuro</div>
@@ -1301,6 +1309,25 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
           </div>
         </div>
       </section>
+
+      <section id="tab-pap" style="display:none">
+        <div class="rh-card">
+          <div class="rh-card-head">
+            <div>
+              <h2>Papelera</h2>
+              <p>Los registros eliminados quedan aquí completos y se pueden restaurar tal como estaban. Mientras un registro esté en la papelera, esa persona puede volver a presentar la inducción.</p>
+            </div>
+            <span class="rh-muted" id="pap-count"></span>
+          </div>
+          <div class="rh-alert rh-card-aviso" id="pap-aviso" hidden><i data-icon="alert"></i><span>La papelera todavía no está activa. Hay que ejecutar <strong>supabase-papelera.sql</strong> en Supabase; desde ese momento, todo lo que se elimine quedará aquí.</span></div>
+          <div class="rh-table-wrap">
+            <table class="rh-table rh-pap-table">
+              <thead><tr><th scope="col">Trabajador</th><th scope="col">Resultado</th><th scope="col">Eliminado</th><th scope="col">Por</th><th scope="col" class="rh-col-actions">Restaurar</th></tr></thead>
+              <tbody id="pap-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -1366,6 +1393,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // La llave anónima es pública por diseño: cualquiera puede verla en el código
 // de la página. La seguridad real vive en las políticas RLS y las funciones
 // RPC dentro de PostgreSQL, no aquí.
+// Los cierres de sesión de esta página van con { scope: 'local' }: las cuentas
+// son las mismas de los otros programas y un signOut() sin argumentos cerraría
+// la sesión de la persona en todos ellos.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Traduce una fila de PostgreSQL (nombres en español) a las claves que usa
@@ -1494,12 +1524,34 @@ function setOfflineBanner(visible) {
   if(b) b.style.display = visible ? 'flex' : 'none';
 }
 
+// Supabase entrega máximo 1000 filas por consulta: los registros se piden por
+// bloques hasta traerlos todos. El orden incluye el id para que ningún registro
+// se repita ni se salte entre un bloque y el siguiente.
+const BLOQUE_REGISTROS = 1000;
 async function apiLoadRecords() {
   try {
-    const { data, error } = await sb
-      .from('inducciones')
-      .select('*')
-      .order('creado_en', { ascending: false });
+    const filas = [];
+    let error = null;
+    // Se avanza según las filas que realmente llegaron (sirve aunque el límite
+    // del servidor sea otro) y se para al recibir un bloque vacío. El tope evita
+    // una vuelta infinita si algo fallara.
+    for(let desde = 0, vueltas = 0; vueltas < 500; vueltas++) {
+      const res = await sb
+        .from('inducciones')
+        .select('*')
+        .order('creado_en', { ascending: false })
+        .order('id', { ascending: false })
+        .range(desde, desde + BLOQUE_REGISTROS - 1);
+      if(res.error) { error = res.error; break; }
+      const bloque = res.data || [];
+      if(!bloque.length) break;
+      filas.push(...bloque);
+      desde += bloque.length;
+    }
+    // Si alguien terminó la inducción mientras se cargaba, un registro puede
+    // llegar dos veces: se deja una sola copia.
+    const vistos = new Set();
+    const data = filas.filter(f => !vistos.has(f.id) && vistos.add(f.id));
 
     if(error) {
       // RLS bloqueó la lectura: la sesión ya no sirve. Esto no es un cierre de
@@ -1507,7 +1559,7 @@ async function apiLoadRecords() {
       // de "Mantener sesión iniciada".
       showToast('⚠️ Sesión expirada, inicie sesión nuevamente');
       localStorage.setItem('da_remember', '0');
-      try { await sb.auth.signOut(); } catch(e) {}
+      try { await sb.auth.signOut({ scope: 'local' }); } catch(e) {}
       adminLoggedIn = false; adminRole = '';
       showScreen('login');
       return false;
@@ -1589,7 +1641,7 @@ async function adminLogin() {
     const { data: rol } = await sb.rpc('ind_mi_rol');
     if(!rol) {
       showToast('⚠️ Este usuario no tiene permisos asignados');
-      await sb.auth.signOut();
+      await sb.auth.signOut({ scope: 'local' });
       return;
     }
 
@@ -1622,7 +1674,7 @@ function toggleRememberSession(checked) {
 async function doAdminLogout() {
   if(!_rememberActive) {
     localStorage.setItem('da_remember', '0');
-    try { await sb.auth.signOut(); } catch(e) {}
+    try { await sb.auth.signOut({ scope: 'local' }); } catch(e) {}
   }
   adminLoggedIn=false; adminRole='';
   showAdminTab('reg');
@@ -2281,7 +2333,9 @@ function showDeleteConfirm(id, name) {
   _confirmacion = null;
   _pendingBulkIds    = null;
   document.getElementById('confirm-title').textContent = 'Eliminar registro de ' + name.split(' ')[0];
-  document.getElementById('confirm-msg').textContent   = 'Esta acción eliminará el registro de PostgreSQL y permitirá que la persona vuelva a realizar la inducción.';
+  document.getElementById('confirm-msg').textContent   = _papeleraActiva
+    ? 'El registro pasa a la papelera y se puede restaurar. Mientras esté allí, la persona podrá volver a realizar la inducción.'
+    : 'Esta acción eliminará el registro de la base de datos y permitirá que la persona vuelva a realizar la inducción.';
   document.getElementById('btn-confirm-action').textContent = 'Sí, eliminar';
   document.getElementById('btn-confirm-action').style.background = '';
   setConfirmIcon('trash', false);
@@ -2295,7 +2349,9 @@ function showBulkDeleteConfirm(ids) {
   _pendingReinduccionId = null;
   _confirmacion = null;
   document.getElementById('confirm-title').textContent = 'Eliminar ' + ids.length + ' registro(s)';
-  document.getElementById('confirm-msg').textContent   = 'Esta acción eliminará los registros seleccionados de PostgreSQL permanentemente.';
+  document.getElementById('confirm-msg').textContent   = _papeleraActiva
+    ? 'Los registros seleccionados pasan a la papelera y se pueden restaurar.'
+    : 'Esta acción eliminará los registros seleccionados de la base de datos permanentemente.';
   document.getElementById('btn-confirm-action').textContent = 'Sí, eliminar';
   document.getElementById('btn-confirm-action').style.background = '';
   setConfirmIcon('trash', false);
@@ -2318,7 +2374,7 @@ function pedirConfirmacion(o) {
   document.getElementById('confirm-msg').textContent   = o.mensaje;
   const btn = document.getElementById('btn-confirm-action');
   btn.textContent = o.boton;
-  btn.style.background = o.aviso ? '#d97706' : '';
+  btn.style.background = o.color || (o.aviso ? '#d97706' : '');
   setConfirmIcon(o.icono || 'trash', !!o.aviso);
   document.getElementById('confirm-modal').classList.add('show');
 }
@@ -2564,11 +2620,13 @@ const VISTAS = {
   ced:  { title:'Certificados por cédula', crumb:'Certificados por cédula',
           sub:'Pega las cédulas de un contrato: descarga los certificados de quienes aprobaron y mira quiénes faltan.' },
   cli:  { title:'Clientes', crumb:'Clientes',
-          sub:'Edificios y entidades que los trabajadores pueden elegir en el formulario de inducción.' }
+          sub:'Edificios y entidades que los trabajadores pueden elegir en el formulario de inducción.' },
+  pap:  { title:'Papelera', crumb:'Papelera',
+          sub:'Registros eliminados. Se pueden restaurar cuando quieras.' }
 };
 // Sección de la página de cada vista, y vistas solo para administradores.
-const SECCION_VISTA = { ind:'tab-reg', rein:'tab-reg', usr:'tab-usr', ced:'tab-ced', cli:'tab-cli' };
-const VISTAS_ADMIN = ['usr', 'cli'];
+const SECCION_VISTA = { ind:'tab-reg', rein:'tab-reg', usr:'tab-usr', ced:'tab-ced', cli:'tab-cli', pap:'tab-pap' };
+const VISTAS_ADMIN = ['usr', 'cli', 'pap'];
 // Actualiza títulos y el ítem activo del menú, sin tocar los filtros.
 function pintarVista(v) {
   _view = v;
@@ -2602,6 +2660,7 @@ function navTo(v) {
   }
   if(v === 'usr') renderUsuarios();
   if(v === 'cli') renderClientes(true);
+  if(v === 'pap') renderPapelera();
   if(v === 'ced') setTimeout(() => document.getElementById('ced-lista')?.focus(), 50);
   toggleSidebar(false);
 }
@@ -2687,6 +2746,7 @@ async function cambiarAcceso(sel) {
 async function renderAdmin() {
   syncAdminTabs();
   cargarUsuarioCabecera();
+  detectarPapelera();
   const sk = (alto, ancho, extra) => `<span class="rh-sk" style="height:${alto}px;width:${ancho};${extra||''}"></span>`;
   document.getElementById('admin-stats').innerHTML = Array.from({ length:5 }, () =>
     `<div class="rh-kpi" aria-hidden="true">${sk(52,'52px','border-radius:50%;flex-shrink:0')}
@@ -3064,6 +3124,7 @@ function openDrawer(id) {
         ${dato('Ciudad', [r.ciudad, r.departamento].filter(Boolean).join(', '))}
       </dl>
       ${reg && !isNaN(reg) ? `<p style="font-size:.76rem;color:var(--rh-muted)">Registrado el ${escapeHtml(reg.toLocaleString('es-CO', { dateStyle:'long', timeStyle:'short' }))}</p>` : ''}
+      <div id="rh-dr-historial" data-id="${rid}"></div>
     </div>
     <div class="rh-dr-foot">
       ${r.passed ? `<button class="rh-btn rh-btn-primary" onclick="regenCert('${rid}')">${icon('download')}Descargar certificado</button>` : ''}
@@ -3074,6 +3135,7 @@ function openDrawer(id) {
   document.getElementById('rh-drawer-scrim').hidden = false;
   d.hidden = false;
   d.querySelector('.rh-dr-head .rh-icon-btn')?.focus();
+  cargarHistorial(rid);
 }
 function closeDrawer() {
   const d = document.getElementById('rh-drawer');
@@ -3940,6 +4002,105 @@ async function eliminarCliente(nombre) {
 }
 
 // ═══════════════════════════════════════
+// PAPELERA E HISTORIAL (supabase-papelera.sql)
+// ═══════════════════════════════════════
+let _papelera = [], _papeleraActiva = false;
+// Se averigua una vez al cargar el panel si la papelera ya está instalada,
+// para que el aviso de eliminar diga la verdad.
+async function detectarPapelera() {
+  if(adminRole !== 'admin') return;
+  try { const { error } = await sb.rpc('ind_historial_registro', { p_id: 0 }); _papeleraActiva = !error; }
+  catch(e) { _papeleraActiva = false; }
+}
+const fechaHora = v => { const d = new Date(v); return isNaN(d) ? '' : d.toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' }); };
+async function renderPapelera() {
+  const tbody = document.getElementById('pap-tbody');
+  if(!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" class="rh-muted">Cargando…</td></tr>';
+  let res;
+  try { res = await sb.rpc('ind_papelera'); } catch(e) { res = { error: e }; }
+  _papeleraActiva = !res.error;
+  document.getElementById('pap-aviso').hidden = _papeleraActiva;
+  _papelera = _papeleraActiva && Array.isArray(res.data) ? res.data : [];
+  document.getElementById('pap-count').textContent = _papeleraActiva
+    ? `${_papelera.length.toLocaleString('es-CO')} registro${_papelera.length === 1 ? '' : 's'}` : '';
+  tbody.innerHTML = _papelera.map((p, i) => {
+    const r = p.registro || {}, aprobado = r.estado === 'Aprobado';
+    return `<tr>
+      <td data-label="Trabajador"><div class="rh-person-name">${escapeHtml(r.nombre || '—')}</div><div class="rh-person-sub">C.C. ${escapeHtml(fmtCedula(r.cedula))}${r.edificio || r.dependencia ? ' · ' + escapeHtml(r.edificio || r.dependencia) : ''}</div></td>
+      <td data-label="Resultado"><span class="rh-status ${aprobado ? 'ok' : 'bad'}">${icon(aprobado ? 'check' : 'x')}${aprobado ? 'Aprobado' : 'Reprobado'} · ${Math.round(Number(r.nota) || 0)}%</span></td>
+      <td data-label="Eliminado" class="rh-nowrap">${escapeHtml(fechaHora(p.eliminado_en))}</td>
+      <td data-label="Por"><span class="rh-trunc" title="${escapeHtml(p.eliminado_por)}">${escapeHtml(p.eliminado_por)}</span></td>
+      <td class="rh-col-actions"><button class="rh-btn rh-btn-sm" onclick="pedirRestaurar(${i})">${icon('rotate')}Restaurar</button></td>
+    </tr>`;
+  }).join('') || `<tr><td colspan="5" class="rh-muted">${_papeleraActiva ? 'La papelera está vacía.' : 'La papelera todavía no está activa.'}</td></tr>`;
+}
+function pedirRestaurar(i) {
+  const p = _papelera[i];
+  if(!p) return;
+  const r = p.registro || {};
+  // Restaurar una inducción aprobada de alguien que ya tiene otra la dejaría repetida.
+  const repetida = r.estado === 'Aprobado' && records.some(x => x.passed && normCedula(x.cedula) === normCedula(r.cedula));
+  pedirConfirmacion({
+    titulo: 'Restaurar registro',
+    mensaje: `Se restaurará el registro de ${r.nombre} (C.C. ${fmtCedula(r.cedula)}) tal como estaba.` +
+      (repetida ? ' Atención: esta persona ya tiene otra inducción aprobada, así que quedaría repetida.' : ''),
+    boton: 'Sí, restaurar',
+    aviso: repetida,
+    color: repetida ? '' : '#1561d0',
+    icono: 'rotate',
+    alConfirmar: () => restaurarRegistro(p.historial_id, r.nombre)
+  });
+}
+async function restaurarRegistro(historialId, nombre) {
+  let res;
+  try { res = await sb.rpc('ind_restaurar', { p_historial_id: historialId }); } catch(e) { res = { error: e }; }
+  const d = res.data;
+  if(res.error || !d || !d.ok) {
+    const motivo = d && d.error === 'sin_permiso'   ? 'Solo un administrador puede restaurar'
+                 : d && d.error === 'ya_restaurado' ? 'Ese registro ya estaba restaurado'
+                 : 'No se pudo restaurar el registro';
+    showToast('⚠️ ' + motivo);
+    renderPapelera();
+    return;
+  }
+  showToast(`♻️ Registro de ${nombre} restaurado`);
+  await renderAdmin();
+  renderPapelera();
+}
+
+// Historial de cambios de un registro, en el panel de detalle.
+const CAMPOS_HISTORIAL = {
+  nombre: 'Nombre', cedula: 'Cédula', cargo: 'Cargo', edificio: 'Entidad', fec_expedicion: 'Fecha de expedición',
+  celular: 'Celular', ciudad: 'Ciudad', departamento: 'Departamento', fecha: 'Fecha', nota: 'Nota', estado: 'Estado', tipo: 'Tipo'
+};
+async function cargarHistorial(id) {
+  const box = document.getElementById('rh-dr-historial');
+  if(!box) return;
+  let res;
+  try { res = await sb.rpc('ind_historial_registro', { p_id: Number(id) }); } catch(e) { res = { error: e }; }
+  // Si mientras tanto se abrió otro registro, no se pinta.
+  if(box.dataset.id !== String(id) || !document.body.contains(box)) return;
+  if(res.error || !Array.isArray(res.data) || !res.data.length) { box.innerHTML = ''; return; }
+  const valor = v => v === null || v === undefined || v === '' ? '—' : String(v);
+  const items = res.data.map(h => {
+    let que = 'Editó el registro';
+    if(h.accion === 'restaurar') que = 'Restauró el registro desde la papelera';
+    else if(h.accion === 'eliminar') que = 'Eliminó el registro';
+    else if(h.antes && h.despues) {
+      const cambios = Object.keys(CAMPOS_HISTORIAL)
+        .filter(k => JSON.stringify(h.antes[k]) !== JSON.stringify(h.despues[k]))
+        .map(k => `${CAMPOS_HISTORIAL[k]}: ${valor(h.antes[k])} → ${valor(h.despues[k])}`);
+      if(h.antes.reinduccion_habilitada !== h.despues.reinduccion_habilitada)
+        cambios.push(h.despues.reinduccion_habilitada ? 'Habilitó la reinducción' : 'Quitó la reinducción');
+      if(cambios.length) que = cambios.join(' · ');
+    }
+    return `<li><div class="rh-hist-que">${escapeHtml(que)}</div><div class="rh-hist-quien">${escapeHtml(fechaHora(h.fecha))} · ${escapeHtml(h.usuario)}</div></li>`;
+  }).join('');
+  box.innerHTML = `<div class="rh-dr-section">Historial de cambios</div><ul class="rh-hist">${items}</ul>`;
+}
+
+// ═══════════════════════════════════════
 // LISTAS DE CLIENTES Y CARGOS
 // ═══════════════════════════════════════
 // Los clientes viven en la base de datos (supabase-clientes.sql) y se manejan
@@ -3978,12 +4139,12 @@ async function initAdminAutoLogin() {
 
     // Había sesión guardada pero la persona pidió no mantenerla: se cierra.
     if(localStorage.getItem('da_remember') !== '1') {
-      await sb.auth.signOut();
+      await sb.auth.signOut({ scope: 'local' });
       return;
     }
 
     const { data: rol } = await sb.rpc('ind_mi_rol');
-    if(!rol) { await sb.auth.signOut(); return; }
+    if(!rol) { await sb.auth.signOut({ scope: 'local' }); return; }
 
     adminRole       = rol;
     adminLoggedIn   = true;
