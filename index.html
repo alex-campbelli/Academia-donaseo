@@ -514,6 +514,7 @@ svg.rh-i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stro
 .rh-nav-item span{flex:1}
 .rh-nav-item[hidden]{display:none}
 .rh-nav-sep{height:1px;background:rgba(255,255,255,.08);margin:10px 4px}
+.rh-nav-portal{margin-bottom:6px;color:#cfe0f7}
 .rh-nav-nota{margin:6px 4px 0;padding:10px 12px;border-radius:var(--rh-r-sm);background:rgba(255,255,255,.05);
   color:#b9c8e0;font-size:.74rem;line-height:1.45}
 .rh-nav-nota a{display:inline-block;margin-top:6px;color:#fff;text-decoration:underline}
@@ -1086,6 +1087,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
       <div><div class="rh-brand-name">DON ASEO <span>LTDA</span></div><div class="rh-brand-nit">NIT 812.000.152-7</div></div>
     </div>
     <nav class="rh-nav">
+      <button class="rh-nav-item rh-nav-portal" id="nav-portal" onclick="irAlPortal()"><i data-icon="chevron-left"></i><span>Portal</span></button>
       <div class="rh-nav-group">Talento Humano</div>
       <button class="rh-nav-item is-active" id="nav-ind" onclick="navTo('ind')"><i data-icon="clipboard"></i><span>Inducciones</span></button>
       <button class="rh-nav-item" id="nav-rein" onclick="navTo('rein')"><i data-icon="rotate"></i><span>Reinducciones</span></button>
@@ -1114,7 +1116,6 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
           <i data-icon="chevron-down"></i>
         </button>
         <div class="rh-menu rh-user-menu" id="rh-user-menu" role="menu" hidden>
-          <button class="rh-menu-item" id="rh-ir-portal" role="menuitem" onclick="cerrarMenus();irAlPortal()"><i data-icon="external"></i>Ir al Portal</button>
           <label class="rh-menu-item" id="rh-item-recordar"><input type="checkbox" id="adm-remember-toggle" onchange="toggleRememberSession(this.checked)"><span>Mantener sesión iniciada</span></label>
           <div class="rh-menu-sep"></div>
           <button class="rh-menu-item is-danger" role="menuitem" onclick="cerrarMenus();doAdminLogout()"><i data-icon="logout"></i>Cerrar sesión</button>
@@ -1384,7 +1385,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // de direcciones y no se guarda en ninguna parte. La sesión que sale de un pase
 // vive solo en esa pestaña: al cerrarla se acaba y no toca las sesiones de los
 // demás programas ni la de "Mantener sesión iniciada".
-const PORTAL_URL = 'https://alex-campbelli.github.io/portal-don-aseo/';
+const PORTAL_URL = 'https://panel.donaseoltda.com/';   // el Portal, desde el 30/09/2026
 const PASE = (() => {
   const m = /(?:^#|&)pase=([^&]+)/.exec(location.hash);
   if(!m) return null;
