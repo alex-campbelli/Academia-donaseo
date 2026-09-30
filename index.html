@@ -398,17 +398,7 @@ body{font-family:'Outfit',sans-serif;background:var(--off);color:var(--gray-800)
 }
 .bulk-bar.show { display:flex; }
 .bulk-bar span { font-size:.83rem;color:var(--blue-deep);font-weight:600; }
-.usr-name{font-weight:600;color:var(--blue-deep)}
-.usr-you{font-weight:400;color:var(--gray-400);font-size:.76rem}
-.usr-mail{color:var(--gray-400);font-size:.78rem}
-.usr-msg{text-align:center;padding:26px;color:var(--gray-400)}
-.usr-select{padding:7px 10px;border:1px solid var(--gray-200);border-radius:8px;
-  font-family:'Outfit',sans-serif;font-size:.8rem;cursor:pointer;background:#fff;min-width:150px}
-.usr-select:disabled{opacity:.65;cursor:not-allowed}
-.usr-select.usr-admin{border-color:rgba(22,163,74,.45);color:#14532d;background:rgba(22,163,74,.06);font-weight:600}
-.usr-select.usr-viewer{border-color:rgba(18,85,163,.35);color:var(--blue-deep);background:rgba(18,85,163,.05)}
-.usr-select.usr-ninguno{color:var(--gray-400)}
-@media(max-width:640px){.usr-mail,.usr-tbl th:nth-child(2){display:none}}
+
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -524,6 +514,9 @@ svg.rh-i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stro
 .rh-nav-item span{flex:1}
 .rh-nav-item[hidden]{display:none}
 .rh-nav-sep{height:1px;background:rgba(255,255,255,.08);margin:10px 4px}
+.rh-nav-nota{margin:6px 4px 0;padding:10px 12px;border-radius:var(--rh-r-sm);background:rgba(255,255,255,.05);
+  color:#b9c8e0;font-size:.74rem;line-height:1.45}
+.rh-nav-nota a{display:inline-block;margin-top:6px;color:#fff;text-decoration:underline}
 .rh-sidebar-foot{margin-top:auto;padding:18px 10px 4px;font-size:.78rem;line-height:1.5;color:#8ea4c8;text-align:center}
 .rh-scrim{display:none}
 
@@ -727,8 +720,6 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 .rh-card-head h2{font-size:1.02rem;font-weight:700;color:var(--rh-text)}
 .rh-card-head p{font-size:.82rem;color:var(--rh-text-2);margin-top:4px;max-width:640px;line-height:1.5}
 .rh-muted{color:var(--rh-muted);font-size:.8rem;white-space:nowrap}
-#screen-admin .usr-name{font-weight:600;color:var(--rh-text)}
-#screen-admin .usr-select{height:36px;border-radius:8px}
 
 /* Modales de editar y confirmar */
 #confirm-modal{background:rgba(10,25,50,.45)}
@@ -1102,7 +1093,10 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
       <div class="rh-nav-sep" data-admin-only hidden></div>
       <button class="rh-nav-item" id="nav-cli" onclick="navTo('cli')" data-admin-only hidden><i data-icon="building"></i><span>Clientes</span></button>
       <button class="rh-nav-item" id="nav-pap" onclick="navTo('pap')" data-admin-only hidden><i data-icon="trash"></i><span>Papelera</span></button>
-      <button class="rh-nav-item" id="nav-usr" onclick="navTo('usr')" data-admin-only hidden><i data-icon="settings"></i><span>Configuración</span></button>
+      <div class="rh-nav-nota" id="nav-nota-portal" data-admin-only hidden>
+        Los usuarios y sus accesos se administran en el Portal.
+        <a id="nav-nota-enlace" href="#" onclick="event.preventDefault();irAlPortal()">Ir al Portal →</a>
+      </div>
     </nav>
     <div class="rh-sidebar-foot">Un entorno limpio<br>crea un mejor futuro</div>
   </aside>
@@ -1229,24 +1223,6 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
             <button class="rh-btn" onclick="clearFilters()"><i data-icon="rotate"></i>Limpiar filtros</button>
           </div>
           <div class="rh-pager" id="rh-pager"></div>
-        </div>
-      </section>
-
-      <section id="tab-usr" style="display:none">
-        <div class="rh-card">
-          <div class="rh-card-head">
-            <div>
-              <h2>Acceso a la Academia</h2>
-              <p>Son las mismas cuentas de firmas y gestión documental. Aquí solo decide quién entra a la Academia y con qué permisos — no cambia el acceso de nadie a los otros sistemas.</p>
-            </div>
-            <span class="rh-muted" id="usr-count"></span>
-          </div>
-          <div class="rh-table-wrap">
-            <table class="rh-table">
-              <thead><tr><th scope="col">Usuario</th><th scope="col">Correo</th><th scope="col">Acceso</th></tr></thead>
-              <tbody id="usr-tbody"></tbody>
-            </table>
-          </div>
         </div>
       </section>
 
@@ -2643,8 +2619,6 @@ const VISTAS = {
           sub:'Consulta, seguimiento y control de las evaluaciones realizadas.' },
   rein: { title:'Reinducciones', crumb:'Reinducciones',
           sub:'Evaluaciones de reinducción realizadas y reinducciones habilitadas.' },
-  usr:  { title:'Configuración de acceso', crumb:'Configuración',
-          sub:'Quién puede entrar a la Academia y con qué permisos.' },
   ced:  { title:'Certificados por cédula', crumb:'Certificados por cédula',
           sub:'Pega las cédulas de un contrato: descarga los certificados de quienes aprobaron y mira quiénes faltan.' },
   cli:  { title:'Clientes', crumb:'Clientes',
@@ -2653,8 +2627,8 @@ const VISTAS = {
           sub:'Registros eliminados. Se pueden restaurar cuando quieras.' }
 };
 // Sección de la página de cada vista, y vistas solo para administradores.
-const SECCION_VISTA = { ind:'tab-reg', rein:'tab-reg', usr:'tab-usr', ced:'tab-ced', cli:'tab-cli', pap:'tab-pap' };
-const VISTAS_ADMIN = ['usr', 'cli', 'pap'];
+const SECCION_VISTA = { ind:'tab-reg', rein:'tab-reg', ced:'tab-ced', cli:'tab-cli', pap:'tab-pap' };
+const VISTAS_ADMIN = ['cli', 'pap'];
 // Actualiza títulos y el ítem activo del menú, sin tocar los filtros.
 function pintarVista(v) {
   _view = v;
@@ -2675,6 +2649,9 @@ function pintarVista(v) {
   Object.keys(VISTAS).forEach(k => document.getElementById('nav-' + k)?.classList.toggle('is-active', k === v));
 }
 function navTo(v) {
+  // Una vista que no existe (por ejemplo la vieja de accesos, que salio con el
+  // Portal) cae en Inducciones en vez de dejar la pagina a medias.
+  if(!VISTAS[v]) v = 'ind';
   if(VISTAS_ADMIN.includes(v) && adminRole !== 'admin') v = 'ind';
   pintarVista(v);
   if(v === 'ind' || v === 'rein') {
@@ -2686,7 +2663,6 @@ function navTo(v) {
       refreshListing();
     }
   }
-  if(v === 'usr') renderUsuarios();
   if(v === 'cli') renderClientes(true);
   if(v === 'pap') renderPapelera();
   if(v === 'ced') setTimeout(() => document.getElementById('ced-lista')?.focus(), 50);
@@ -2698,77 +2674,13 @@ function toggleSidebar(forzar) {
   s.classList.toggle('rh-nav-open', forzar !== undefined ? !!forzar : !s.classList.contains('rh-nav-open'));
 }
 // Se conserva el nombre: el cierre de sesión y otras partes la usan.
-function showAdminTab(tab) {
-  navTo(tab === 'usr' ? 'usr' : (_view === 'rein' ? 'rein' : 'ind'));
+function showAdminTab() {
+  navTo(_view === 'rein' ? 'rein' : 'ind');
 }
 
 function syncAdminTabs() {
   document.querySelectorAll('#screen-admin [data-admin-only]').forEach(el => { el.hidden = adminRole !== 'admin'; });
   if(adminRole !== 'admin' && VISTAS_ADMIN.includes(_view)) navTo('ind');
-}
-
-const ETIQUETA_ROL = { ninguno: 'Sin acceso', viewer: 'Solo lectura', admin: 'Administrador' };
-
-async function renderUsuarios() {
-  const tb  = document.getElementById('usr-tbody');
-  const cnt = document.getElementById('usr-count');
-  tb.innerHTML = '<tr><td colspan="3" class="usr-msg">Cargando usuarios...</td></tr>';
-  cnt.textContent = '';
-
-  const { data, error } = await sb.rpc('ind_listar_usuarios');
-  if(error) {
-    tb.innerHTML = '<tr><td colspan="3" class="usr-msg">No se pudo cargar la lista de usuarios.</td></tr>';
-    return;
-  }
-
-  const usuarios = data || [];
-  cnt.textContent = usuarios.length + ' registrado(s)';
-  tb.innerHTML = usuarios.map(u => {
-    const rol = u.rol || 'ninguno';
-    const opciones = ['ninguno','viewer','admin']
-      .map(v => `<option value="${v}" ${v===rol?'selected':''}>${ETIQUETA_ROL[v]}</option>`).join('');
-    return `<tr>
-      <td class="usr-name">${escapeHtml(u.nombre)}${u.es_yo ? ' <span class="usr-you">(tú)</span>' : ''}</td>
-      <td class="usr-mail">${escapeHtml(u.email)}</td>
-      <td>
-        <select class="usr-select usr-${rol}" data-user="${escapeHtml(u.user_id)}" data-prev="${rol}"
-                ${u.es_yo ? 'disabled title="No puede cambiar su propio acceso"' : ''}
-                onchange="cambiarAcceso(this)">${opciones}</select>
-      </td>
-    </tr>`;
-  }).join('') || '<tr><td colspan="3" class="usr-msg">No hay usuarios registrados.</td></tr>';
-}
-
-async function cambiarAcceso(sel) {
-  const userId = sel.dataset.user;
-  const nuevo  = sel.value;
-  const previo = sel.dataset.prev;
-  sel.disabled = true;
-
-  let res = null;
-  try {
-    const { data, error } = await sb.rpc('ind_asignar_rol', { p_user_id: userId, p_rol: nuevo });
-    res = error ? { ok: false } : data;
-  } catch(e) { res = { ok: false }; }
-
-  sel.disabled = false;
-
-  if(!res || !res.ok) {
-    sel.value = previo;
-    const motivos = {
-      no_autorizado:            'No tiene permisos para cambiar accesos',
-      no_puedes_quitarte_admin: 'No puede quitarse su propio rol de administrador',
-      ultimo_admin:             'Debe quedar al menos un administrador',
-      usuario_no_existe:        'Ese usuario ya no existe',
-      rol_invalido:             'Rol no válido'
-    };
-    showToast('⚠️ ' + (motivos[res?.error] || 'No se pudo cambiar el acceso'));
-    return;
-  }
-
-  sel.dataset.prev = nuevo;
-  sel.className = 'usr-select usr-' + nuevo;
-  showToast('✅ Acceso actualizado: ' + ETIQUETA_ROL[nuevo]);
 }
 
 async function renderAdmin() {
@@ -2846,7 +2758,7 @@ function applyFilters() {
     showToast('⚠️ La fecha inicial es posterior a la fecha final'); return;
   }
   if(_range && (_filters.from !== _rangeFechas.from || _filters.to !== _rangeFechas.to)) _range = '';
-  if(_view !== 'usr') pintarVista(_filters.tipo === 'Reinduccion' ? 'rein' : 'ind');
+  pintarVista(_filters.tipo === 'Reinduccion' ? 'rein' : 'ind');
   _page = 1;
   refreshListing(true);
 }
@@ -4163,6 +4075,8 @@ cargarClientes();
 function irAlPortal() {
   location.href = PORTAL_URL;
 }
+// La nota del menú lleva al Portal (un enlace de verdad, con la misma dirección).
+document.getElementById('nav-nota-enlace')?.setAttribute('href', PORTAL_URL);
 
 function avisoPortal(texto) {
   const caja = document.getElementById('pase-aviso');
