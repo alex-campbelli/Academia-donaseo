@@ -517,7 +517,6 @@ svg.rh-i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stro
 .rh-nav-portal{margin-bottom:6px;color:#cfe0f7}
 .rh-nav-nota{margin:6px 4px 0;padding:10px 12px;border-radius:var(--rh-r-sm);background:rgba(255,255,255,.05);
   color:#b9c8e0;font-size:.74rem;line-height:1.45}
-.rh-nav-nota a{display:inline-block;margin-top:6px;color:#fff;text-decoration:underline}
 .rh-sidebar-foot{margin-top:auto;padding:18px 10px 4px;font-size:.78rem;line-height:1.5;color:#8ea4c8;text-align:center}
 .rh-scrim{display:none}
 
@@ -1095,10 +1094,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
       <div class="rh-nav-sep" data-admin-only hidden></div>
       <button class="rh-nav-item" id="nav-cli" onclick="navTo('cli')" data-admin-only hidden><i data-icon="building"></i><span>Clientes</span></button>
       <button class="rh-nav-item" id="nav-pap" onclick="navTo('pap')" data-admin-only hidden><i data-icon="trash"></i><span>Papelera</span></button>
-      <div class="rh-nav-nota" id="nav-nota-portal" data-admin-only hidden>
-        Los usuarios y sus accesos se administran en el Portal.
-        <a id="nav-nota-enlace" href="#" onclick="event.preventDefault();irAlPortal()">Ir al Portal →</a>
-      </div>
+      <div class="rh-nav-nota" id="nav-nota-portal" data-admin-only hidden>Los usuarios y sus accesos se administran en el Portal.</div>
     </nav>
     <div class="rh-sidebar-foot">Un entorno limpio<br>crea un mejor futuro</div>
   </aside>
@@ -4076,8 +4072,6 @@ cargarClientes();
 function irAlPortal() {
   location.href = PORTAL_URL;
 }
-// La nota del menú lleva al Portal (un enlace de verdad, con la misma dirección).
-document.getElementById('nav-nota-enlace')?.setAttribute('href', PORTAL_URL);
 
 function avisoPortal(texto) {
   const caja = document.getElementById('pase-aviso');
