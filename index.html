@@ -15,6 +15,12 @@ if (/[#&](type=(recovery|invite)|error_code=)/.test(location.hash)) location.rep
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 
+/* Lo que lleva el atributo "hidden" no se ve, punto. Sin esto, cualquier regla
+   con clase (por ejemplo display:flex) le gana al hidden del navegador y el
+   elemento queda a la vista: así se vio durante unos días el aviso de permisos
+   cambiados, sin que nada hubiera cambiado. */
+[hidden] { display: none !important; }
+
 :root {
   --blue-deep:#0a2d5e;
   --blue:#1255a3;
@@ -515,6 +521,9 @@ svg.rh-i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stro
 .rh-nav-item[hidden]{display:none}
 .rh-nav-sep{height:1px;background:rgba(255,255,255,.08);margin:10px 4px}
 .rh-nav-portal{margin-bottom:6px;color:#cfe0f7}
+.rh-viendo{display:inline-flex;align-items:center;gap:7px;margin:8px 0 0;padding:5px 11px;border-radius:999px;
+  background:rgba(18,85,163,.08);border:1px solid rgba(18,85,163,.18);color:var(--blue-deep);
+  font-size:.78rem;font-weight:600}
 .rh-aviso-permisos{position:sticky;top:64px;z-index:39;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
   padding:11px 28px;background:#fef3c7;border-bottom:1px solid #f0c674;color:#7c4a03;font-size:.86rem}
 .rh-aviso-permisos button{border:0;border-radius:8px;padding:7px 14px;background:#7c4a03;color:#fff;
@@ -1134,6 +1143,7 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
         <div>
           <h1 class="rh-title" id="rh-page-title">Inducciones y Reinducciones</h1>
           <p class="rh-subtitle" id="rh-page-sub">Consulta, seguimiento y control de las evaluaciones realizadas.</p>
+          <p class="rh-viendo" id="rh-viendo" hidden></p>
         </div>
         <div class="rh-page-actions" id="rh-page-actions">
           <div class="rh-progress" id="rh-progress" role="status" aria-live="polite" hidden>
@@ -2695,6 +2705,7 @@ async function renderAdmin() {
   vigilarAcceso();
   syncAdminTabs();
   cargarUsuarioCabecera();
+  cargarMisClientes();
   detectarPapelera();
   const sk = (alto, ancho, extra) => `<span class="rh-sk" style="height:${alto}px;width:${ancho};${extra||''}"></span>`;
   document.getElementById('admin-stats').innerHTML = Array.from({ length:5 }, () =>
@@ -3677,7 +3688,9 @@ const ESTADOS_CED = {
 // Por qué no tiene certificado, en texto.
 function motivoCed(x) {
   if(x.estado !== 'falta') return '';
-  if(!x.intentos) return 'No la ha presentado';
+  // Con clientes asignados no se puede saber si no la presentó o si es de otro
+  // cliente: la base solo entrega lo suyo. Decir "no la ha presentado" sería falso.
+  if(!x.intentos) return _misClientes.length ? 'No está entre tus clientes' : 'No la ha presentado';
   return `${x.intentos} intento${x.intentos === 1 ? '' : 's'} sin aprobar · mejor nota ${x.mejorNota}%`;
 }
 // Cada línea puede traer nombre y cédula (como sale de la plataforma de RRHH o
@@ -3760,7 +3773,10 @@ function pintarCedulas() {
     kpi('total', 'id-card',      f(n['']),   'Cédulas',         'en la lista pegada') +
     kpi('ok',    'check-circle', f(n.ok),    'Con certificado', pct(n.ok)) +
     kpi('bad',   'x-circle',     f(n.falta), 'Sin certificado',
-        n.falta ? `${f(nunca)} no la ${nunca === 1 ? 'ha' : 'han'} presentado · ${f(sinAprobar)} sin aprobar` : pct(n.falta));
+        n.falta ? (_misClientes.length
+                     ? `${f(nunca)} sin registro en tus clientes · ${f(sinAprobar)} sin aprobar`
+                     : `${f(nunca)} no la ${nunca === 1 ? 'ha' : 'han'} presentado · ${f(sinAprobar)} sin aprobar`)
+                : pct(n.falta));
 
   const av = _cedAvisos, partes = [];
   if(av.repetidas) partes.push(`${f(av.repetidas)} cédula${av.repetidas === 1 ? '' : 's'} repetida${av.repetidas === 1 ? '' : 's'}`);
@@ -4114,6 +4130,27 @@ async function entrarConPase() {
   _rememberActive = false;          // en una pestaña del Portal la sesión se acaba al cerrarla
   showScreen('admin');
   renderAdmin();
+}
+
+// ── Clientes asignados ─────────────────────────────────────────────────────
+// Vacío = ve todos (administradores y quien no esté limitado). Quien sí lo esté
+// ve el aviso "Viendo: …", para que no crea que le faltan registros. El filtro
+// de verdad lo hace la base: aquí solo se avisa.
+let _misClientes = [];
+
+async function cargarMisClientes() {
+  try {
+    const { data, error } = await sb.rpc('ind_mis_clientes');
+    _misClientes = (!error && Array.isArray(data)) ? data : [];
+  } catch(e) {
+    _misClientes = [];
+  }
+  const av = document.getElementById('rh-viendo');
+  if(!av) return;
+  av.hidden = !_misClientes.length;
+  av.textContent = _misClientes.length
+    ? 'Viendo: ' + _misClientes.map(c => c.nombre).join(', ')
+    : '';
 }
 
 // ── Revisar el acceso mientras la página está abierta ──────────────────────
