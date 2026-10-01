@@ -515,6 +515,11 @@ svg.rh-i{width:18px;height:18px;flex-shrink:0;stroke:currentColor;fill:none;stro
 .rh-nav-item[hidden]{display:none}
 .rh-nav-sep{height:1px;background:rgba(255,255,255,.08);margin:10px 4px}
 .rh-nav-portal{margin-bottom:6px;color:#cfe0f7}
+.rh-aviso-permisos{position:sticky;top:64px;z-index:39;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  padding:11px 28px;background:#fef3c7;border-bottom:1px solid #f0c674;color:#7c4a03;font-size:.86rem}
+.rh-aviso-permisos button{border:0;border-radius:8px;padding:7px 14px;background:#7c4a03;color:#fff;
+  font:inherit;font-weight:600;cursor:pointer}
+@media(max-width:640px){.rh-aviso-permisos{padding:10px 14px}}
 .rh-nav-nota{margin:6px 4px 0;padding:10px 12px;border-radius:var(--rh-r-sm);background:rgba(255,255,255,.05);
   color:#b9c8e0;font-size:.74rem;line-height:1.45}
 .rh-sidebar-foot{margin-top:auto;padding:18px 10px 4px;font-size:.78rem;line-height:1.5;color:#8ea4c8;text-align:center}
@@ -1119,6 +1124,11 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
       </div>
     </header>
 
+    <div class="rh-aviso-permisos" id="aviso-permisos" role="status" hidden>
+      <span>Tus permisos en la Academia cambiaron. Guarda lo que estés haciendo y actualiza la página.</span>
+      <button type="button" onclick="location.reload()">Actualizar ahora</button>
+    </div>
+
     <main class="rh-content">
       <div class="rh-page-head">
         <div>
@@ -1677,6 +1687,7 @@ async function doAdminLogout() {
     localStorage.setItem('da_remember', '0');
     try { await sb.auth.signOut({ scope: 'local' }); } catch(e) {}
   }
+  dejarDeVigilar();
   adminLoggedIn=false; adminRole='';
   showAdminTab('reg');
   showScreen('login');
@@ -2681,6 +2692,7 @@ function syncAdminTabs() {
 }
 
 async function renderAdmin() {
+  vigilarAcceso();
   syncAdminTabs();
   cargarUsuarioCabecera();
   detectarPapelera();
@@ -4104,6 +4116,101 @@ async function entrarConPase() {
   renderAdmin();
 }
 
+// ── Revisar el acceso mientras la página está abierta ──────────────────────
+// Si el Portal le quita el acceso a alguien que tiene la academia abierta, la
+// base deja de darle datos al instante, pero lo que ya estaba cargado se seguiría
+// viendo hasta recargar. Esto lo revisa cada minuto (solo con la pestaña a la
+// vista) y cada vez que vuelve a la pestaña. Una consulta pequeña por minuto.
+const REVISAR_ACCESO_CADA = 60 * 1000;
+let _revisando = false, _revisorTimer = null, _avisoPermisos = false;
+
+function vigilarAcceso() {
+  if(_revisorTimer) return;
+  _revisorTimer = setInterval(() => { if(!document.hidden) revisarAcceso(); }, REVISAR_ACCESO_CADA);
+}
+
+function dejarDeVigilar() {
+  if(_revisorTimer) clearInterval(_revisorTimer);
+  _revisorTimer = null;
+  _revisando = false;
+}
+
+// Al volver a la pestaña se revisa de una, sin esperar el minuto.
+document.addEventListener('visibilitychange', () => { if(!document.hidden) revisarAcceso(); });
+
+async function revisarAcceso() {
+  if(_revisando || !adminLoggedIn) return;        // una a la vez, y solo estando adentro
+  _revisando = true;
+  try {
+    const { data: rol, error } = await sb.rpc('ind_mi_rol');
+    // Si no se pudo preguntar (red, o la función no está), no se decide nada:
+    // se vuelve a intentar en la siguiente vuelta. Nadie sale por un error.
+    if(error) return;
+    if(!rol) { await perdioElAcceso(); return; }
+    if(rol !== adminRole) avisarPermisosCambiados();
+  } catch(e) {
+    // sin internet: igual, no se decide nada
+  } finally {
+    _revisando = false;
+  }
+}
+
+const AVISO_SIN_ACCESO = 'Ya no tienes acceso a la Academia. Si crees que es un error, habla con el administrador.';
+
+// Le quitaron el acceso: no queda nada cargado ni guardado en el navegador, ni
+// ninguna ventana abierta encima (editar, confirmar, el panel lateral, un menú).
+// Recargar es la forma segura de cerrar todo, incluso lo que se agregue después.
+async function perdioElAcceso() {
+  dejarDeVigilar();
+  adminLoggedIn = false;
+  adminRole = '';
+  records = [];
+  localSave();
+  const tb = document.getElementById('adm-tbody');
+  if(tb) tb.innerHTML = '';
+  let marcado = false;
+  try { sessionStorage.setItem('academia.sin-acceso', '1'); marcado = true; } catch(e) {}
+  try { await sb.auth.signOut({ scope: 'local' }); } catch(e) {}
+  if(marcado) { location.reload(); return; }
+  // Sin poder dejar la marca (navegador con el almacenamiento bloqueado), se
+  // cierra todo a mano y se avisa sin recargar.
+  cerrarTodoLoAbierto();
+  showScreen('adminlogin');
+  avisoPortal(AVISO_SIN_ACCESO);
+}
+
+// Cierra lo que esté abierto por encima de la pantalla.
+function cerrarTodoLoAbierto() {
+  try { closeEditModal(); } catch(e) {}
+  try { closeConfirm(); } catch(e) {}
+  try { closeDrawer(); } catch(e) {}
+  try { cerrarMenus(); } catch(e) {}
+  try { toggleSidebar(false); } catch(e) {}
+}
+
+// Después de recargar por haber perdido el acceso, la marca dice que hay que
+// explicar por qué. Se borra al leerla, para que no vuelva a salir.
+function seQuedoSinAcceso() {
+  let marca = null;
+  try {
+    marca = sessionStorage.getItem('academia.sin-acceso');
+    sessionStorage.removeItem('academia.sin-acceso');
+  } catch(e) {}
+  if(!marca) return false;
+  showScreen('adminlogin');
+  avisoPortal(AVISO_SIN_ACCESO);
+  return true;
+}
+
+// Le cambiaron el rol: se avisa una vez y ella decide cuándo actualizar, para
+// no perder lo que esté escribiendo.
+function avisarPermisosCambiados() {
+  if(_avisoPermisos) return;
+  _avisoPermisos = true;
+  const aviso = document.getElementById('aviso-permisos');
+  if(aviso) aviso.hidden = false;
+}
+
 // ── Auto-login RRHH si hay sesión guardada ──
 async function initAdminAutoLogin() {
   try {
@@ -4116,6 +4223,7 @@ async function initAdminAutoLogin() {
       if(fila && fila.parentElement) fila.parentElement.hidden = true;
     }
     if(PASE) return await entrarConPase();
+    if(seQuedoSinAcceso()) return;
 
     const { data: { session } } = await sb.auth.getSession();
     if(!session) return;
