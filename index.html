@@ -1387,11 +1387,13 @@ button.rh-kpi:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(15,35,
 // ═══════════════════════════════════════
 // Reemplazar con los valores del proyecto: Supabase → Settings → API
 const SUPABASE_URL      = 'https://nqkiepqaujlgmkvsevdr.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5xa2llcHFhdWpsZ21rdnNldmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NDI5NzEsImV4cCI6MjA5NDQxODk3MX0._UxBdDky3VIfnGQHGXXeAG3okQY4kflGtbff7pbPfrI';
+const SUPABASE_ANON_KEY = 'sb_publishable_cl1Dx7YVlYr4JO9qOWlZ6g_9h9oP2p0';
 
-// La llave anónima es pública por diseño: cualquiera puede verla en el código
+// La llave publicable es pública por diseño: cualquiera puede verla en el código
 // de la página. La seguridad real vive en las políticas RLS y las funciones
 // RPC dentro de PostgreSQL, no aquí.
+// (Antes era la "anon key" en formato JWT; Supabase retira esas llaves legacy
+// a fines de 2026, así que se cambió por la publicable, que hace lo mismo.)
 // Los cierres de sesión de esta página van con { scope: 'local' }: las cuentas
 // son las mismas de los otros programas y un signOut() sin argumentos cerraría
 // la sesión de la persona en todos ellos.
